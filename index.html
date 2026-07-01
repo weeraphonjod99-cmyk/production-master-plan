@@ -3,156 +3,170 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Monthly Production Plan</title>
+    <title>Production Master Plan</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main class="shell">
       <section class="workspace" aria-labelledby="page-title">
-        <div class="topbar">
+        <header class="topbar">
           <div>
-            <p class="eyebrow">Production Planning</p>
-            <h1 id="page-title">แผนการผลิตรายเดือน</h1>
+            <p class="eyebrow">Production Master Plan</p>
+            <h1 id="page-title">วางแผนการผลิตรายเดือนตามเครื่องจักร</h1>
+            <p class="subtitle">ข้อมูลจาก Planing Production สำหรับภาพรวมโหลดงานรายเครื่อง</p>
           </div>
           <div class="actions">
-            <a class="button primary" href="https://docs.google.com/spreadsheets/d/1iedzv4R7oyw1x7mjAAsAGlVHan7eFBAOVfgaoIWYWkU/edit#gid=424242002" target="_blank" rel="noreferrer">
-              เปิด Master Plan
-            </a>
-            <a class="button" href="https://docs.google.com/spreadsheets/d/1iedzv4R7oyw1x7mjAAsAGlVHan7eFBAOVfgaoIWYWkU/edit#gid=424242003" target="_blank" rel="noreferrer">
-              Machine Summary
-            </a>
+            <a class="button primary" id="sourceSheetLink" href="#" target="_blank" rel="noreferrer">เปิด Google Sheet</a>
             <button class="button" id="addOrderButton" type="button">+ เพิ่มออเดอร์</button>
             <button class="button" id="savePlanButton" type="button">บันทึกแผน</button>
-            <button class="button danger" id="resetPlanButton" type="button">รีเซ็ตแผน</button>
+            <button class="button danger" id="resetPlanButton" type="button">รีเซ็ต</button>
           </div>
-        </div>
+        </header>
 
-        <div class="overview-grid" aria-label="Production snapshot">
+        <section class="overview-grid" aria-label="ภาพรวมแผนผลิต">
+          <article class="metric">
+            <span>เครื่องทั้งหมด</span>
+            <strong id="machineCount">0</strong>
+          </article>
           <article class="metric">
             <span>เครื่องที่มีงาน</span>
-            <strong id="machineCount">0</strong>
+            <strong id="busyMachineCount">0</strong>
           </article>
           <article class="metric">
             <span>Order ทั้งหมด</span>
             <strong id="orderCount">0</strong>
           </article>
-          <article class="metric">
-            <span>ยอดค้างในแผน</span>
-            <strong id="remainingQty">0</strong>
-          </article>
           <article class="metric warning">
             <span>เครื่องเกินเดือน</span>
             <strong id="overCapacity">0</strong>
           </article>
-        </div>
-
-        <section class="control-panel" aria-label="Planning controls">
-          <label class="search-field">
-            <span>ค้นหา</span>
-            <input id="searchInput" type="search" placeholder="เครื่อง / ออเดอร์ / ชิ้นงาน" />
-          </label>
-          <label class="select-field">
-            <span>เครื่องจักร</span>
-            <select id="machineFilter"></select>
-          </label>
-          <label class="select-field">
-            <span>สถานะ</span>
-            <select id="statusFilter">
-              <option value="all">ทั้งหมด</option>
-              <option value="Over capacity">เกินกำลัง</option>
-              <option value="Tight">แน่น</option>
-              <option value="OK">OK</option>
-            </select>
-          </label>
-          <label class="select-field">
-            <span>เดือนแผน</span>
-            <select id="monthSelect">
-              <option value="2026-07">กรกฎาคม 2026</option>
-            </select>
-          </label>
-          <button class="button compact" id="resetButton" type="button">ล้างตัวกรอง</button>
         </section>
 
-        <section class="status-strip" aria-label="Capacity lanes">
-          <div class="lane-label">
-            <span>โหลดกำลังผลิต</span>
-            <strong id="monthDaysLabel">31 วัน</strong>
-          </div>
-          <div class="lane-track" id="laneTrack"></div>
+        <section class="edit-strip" aria-label="สถานะแผน">
+          <span id="saveStatus">พร้อมวางแผน</span>
+          <span id="dataStamp">ข้อมูลจากชีตใหม่</span>
         </section>
 
-        <section class="edit-strip" aria-label="Editable planning status">
-          <span id="saveStatus">พร้อมแก้แผน</span>
-        </section>
-
-        <section class="schedule-panel" aria-label="Monthly machine plan">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Monthly View</p>
-              <h2>แผนรายเดือนตามเครื่องจักร</h2>
+        <section class="planner-layout">
+          <aside class="machine-panel" aria-label="เมนูเครื่องจักร">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Machine Menu</p>
+                <h2>เลือกเครื่องจักร</h2>
+              </div>
+              <button class="button compact" id="resetFilterButton" type="button">ล้างตัวกรอง</button>
             </div>
-            <div class="legend" aria-label="Plan legend">
-              <span><i class="legend-dot ok"></i>ในเดือน</span>
-              <span><i class="legend-dot tight"></i>แน่น</span>
-              <span><i class="legend-dot over"></i>ล้นเดือน</span>
-            </div>
-          </div>
-          <div class="calendar-header" id="calendarHeader"></div>
-          <div class="schedule-board" id="scheduleBoard"></div>
-        </section>
-
-        <section class="detail-panel" aria-labelledby="detailTitle">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Machine Detail</p>
-              <h2 id="detailTitle">-</h2>
-            </div>
-            <div class="detail-kpis" id="machineInsights"></div>
-          </div>
-          <div class="order-search-panel">
-            <label class="search-field order-search-field">
-              <span>ค้นหาออเดอร์</span>
-              <input id="orderSearchInput" type="search" placeholder="Order No. / Part Name / Part No." />
+            <label class="search-field">
+              <span>ค้นหา</span>
+              <input id="globalSearch" type="search" placeholder="เครื่อง / Order / Part No." />
             </label>
-            <span id="orderSearchCount">0 orders</span>
+            <label class="select-field">
+              <span>สถานะ</span>
+              <select id="statusFilter">
+                <option value="all">ทั้งหมด</option>
+                <option value="Over capacity">เกินเดือน</option>
+                <option value="Tight">แน่น</option>
+                <option value="OK">OK</option>
+                <option value="No order">ยังไม่มีงาน</option>
+              </select>
+            </label>
+            <div class="machine-menu" id="machineMenu"></div>
+          </aside>
+
+          <section class="planner-main" aria-label="แผนเครื่องที่เลือก">
+            <section class="machine-focus">
+              <div>
+                <p class="eyebrow">Selected Machine</p>
+                <h2 id="selectedMachineName">-</h2>
+              </div>
+              <div class="focus-tools">
+                <label class="capacity-control">
+                  <span>กำลังผลิต/วัน</span>
+                  <input id="capacityInput" type="number" min="1" step="1" />
+                  <small>pcs/day</small>
+                </label>
+                <div class="detail-kpis" id="machineKpis"></div>
+              </div>
+            </section>
+
+            <section class="timeline-card" aria-label="แผนรายเดือนของเครื่อง">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Monthly View</p>
+                  <h2>ภาพรวมงานรายเดือน</h2>
+                </div>
+                <div class="legend" aria-label="คำอธิบายสี">
+                  <span><i class="legend-dot ok"></i>ในเดือน</span>
+                  <span><i class="legend-dot tight"></i>แน่น</span>
+                  <span><i class="legend-dot over"></i>ล้นเดือน</span>
+                </div>
+              </div>
+              <div class="calendar-header" id="calendarHeader"></div>
+              <div class="selected-timeline" id="selectedTimeline"></div>
+            </section>
+
+            <section class="orders-panel" aria-label="ออเดอร์ของเครื่อง">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Orders</p>
+                  <h2>ออเดอร์ในเครื่องนี้</h2>
+                </div>
+                <span id="orderSearchCount">0 orders</span>
+              </div>
+              <div class="order-search-panel">
+                <label class="search-field order-search-field">
+                  <span>ค้นหาออเดอร์</span>
+                  <input id="orderSearchInput" type="search" placeholder="Order No. / Part Name / Part No." />
+                </label>
+              </div>
+              <div class="order-cards" id="orderCards"></div>
+              <div class="table-wrap detail-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>ลำดับ</th>
+                      <th>Order</th>
+                      <th>Part</th>
+                      <th class="numeric">ค้างผลิต</th>
+                      <th class="numeric">วันเครื่อง</th>
+                      <th>เริ่ม</th>
+                      <th>จบ</th>
+                      <th>สถานะ</th>
+                      <th>ย้ายไป</th>
+                      <th>เรียง</th>
+                    </tr>
+                  </thead>
+                  <tbody id="orderRows"></tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+        </section>
+
+        <section class="summary-panel" aria-label="สรุปทุกเครื่อง">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Machine Summary</p>
+              <h2>สรุปโหลดงานทุกเครื่อง</h2>
+            </div>
+            <span id="summaryCount">0 เครื่อง</span>
           </div>
-          <div class="order-cards" id="orderCards"></div>
-          <div class="table-wrap detail-table" aria-label="Selected machine orders">
+          <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>ลำดับ</th>
-                  <th>Order</th>
-                  <th>Part</th>
-                  <th class="numeric">ค้างผลิต</th>
-                  <th class="numeric">วันเครื่อง</th>
-                  <th>เริ่ม</th>
-                  <th>จบ</th>
-                  <th>สถานะ</th>
-                  <th>ย้ายไป</th>
-                  <th>ลำดับ</th>
+                  <th>Machine</th>
+                  <th class="numeric">Orders</th>
+                  <th class="numeric">Remain</th>
+                  <th class="numeric">Machine Days</th>
+                  <th class="numeric">Capacity/day</th>
+                  <th>Finish</th>
+                  <th>Status</th>
                 </tr>
               </thead>
-              <tbody id="orderRows"></tbody>
+              <tbody id="summaryRows"></tbody>
             </table>
           </div>
-        </section>
-
-        <section class="table-wrap" aria-label="Machine summary table">
-          <table>
-            <thead>
-              <tr>
-                <th>Machine</th>
-                <th class="numeric">Orders</th>
-                <th class="numeric">Remain</th>
-                <th class="numeric">Machine Days</th>
-                <th class="numeric">Capacity/day</th>
-                <th>Finish</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="summaryRows"></tbody>
-          </table>
         </section>
       </section>
     </main>
@@ -164,7 +178,7 @@
             <p class="eyebrow">Production Order</p>
             <h2>เพิ่มออเดอร์ผลิต</h2>
           </div>
-          <button class="icon-button" id="cancelOrderButton" type="button" title="ปิด">×</button>
+          <button class="icon-button" id="cancelOrderButton" type="button" aria-label="ปิด">×</button>
         </div>
         <div class="form-grid">
           <label>
@@ -198,6 +212,8 @@
         </div>
       </form>
     </dialog>
+
+    <script src="./plan-data.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>
