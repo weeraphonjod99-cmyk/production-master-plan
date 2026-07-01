@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Production Master Plan</title>
+    <title>Monthly Production Plan</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -12,7 +12,7 @@
         <div class="topbar">
           <div>
             <p class="eyebrow">Production Planning</p>
-            <h1 id="page-title">Master Plan</h1>
+            <h1 id="page-title">แผนการผลิตรายเดือน</h1>
           </div>
           <div class="actions">
             <a class="button primary" href="https://docs.google.com/spreadsheets/d/1iedzv4R7oyw1x7mjAAsAGlVHan7eFBAOVfgaoIWYWkU/edit#gid=424242002" target="_blank" rel="noreferrer">
@@ -34,27 +34,37 @@
             <strong id="orderCount">0</strong>
           </article>
           <article class="metric">
-            <span>ยอดค้างหลังแผน</span>
+            <span>ยอดค้างในแผน</span>
             <strong id="remainingQty">0</strong>
           </article>
           <article class="metric warning">
-            <span>เครื่องเกินกำลัง</span>
+            <span>เครื่องเกินเดือน</span>
             <strong id="overCapacity">0</strong>
           </article>
         </div>
 
-        <section class="control-panel" aria-label="Machine controls">
+        <section class="control-panel" aria-label="Planning controls">
           <label class="search-field">
             <span>ค้นหา</span>
-            <input id="searchInput" type="search" placeholder="เครื่องหรือสถานะ" />
+            <input id="searchInput" type="search" placeholder="เครื่อง / ออเดอร์ / ชิ้นงาน" />
+          </label>
+          <label class="select-field">
+            <span>เครื่องจักร</span>
+            <select id="machineFilter"></select>
           </label>
           <label class="select-field">
             <span>สถานะ</span>
             <select id="statusFilter">
               <option value="all">ทั้งหมด</option>
-              <option value="Over capacity">Over capacity</option>
-              <option value="Tight">Tight</option>
+              <option value="Over capacity">เกินกำลัง</option>
+              <option value="Tight">แน่น</option>
               <option value="OK">OK</option>
+            </select>
+          </label>
+          <label class="select-field">
+            <span>เดือนแผน</span>
+            <select id="monthSelect">
+              <option value="2026-07">กรกฎาคม 2026</option>
             </select>
           </label>
           <button class="button compact" id="resetButton" type="button">ล้างตัวกรอง</button>
@@ -62,10 +72,54 @@
 
         <section class="status-strip" aria-label="Capacity lanes">
           <div class="lane-label">
-            <span>Capacity load</span>
-            <strong>31 วัน</strong>
+            <span>โหลดกำลังผลิต</span>
+            <strong id="monthDaysLabel">31 วัน</strong>
           </div>
           <div class="lane-track" id="laneTrack"></div>
+        </section>
+
+        <section class="schedule-panel" aria-label="Monthly machine plan">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Monthly View</p>
+              <h2>แผนรายเดือนตามเครื่องจักร</h2>
+            </div>
+            <div class="legend" aria-label="Plan legend">
+              <span><i class="legend-dot ok"></i>ในเดือน</span>
+              <span><i class="legend-dot tight"></i>แน่น</span>
+              <span><i class="legend-dot over"></i>ล้นเดือน</span>
+            </div>
+          </div>
+          <div class="calendar-header" id="calendarHeader"></div>
+          <div class="schedule-board" id="scheduleBoard"></div>
+        </section>
+
+        <section class="detail-panel" aria-labelledby="detailTitle">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Machine Detail</p>
+              <h2 id="detailTitle">-</h2>
+            </div>
+            <div class="detail-kpis" id="machineInsights"></div>
+          </div>
+          <div class="order-cards" id="orderCards"></div>
+          <div class="table-wrap detail-table" aria-label="Selected machine orders">
+            <table>
+              <thead>
+                <tr>
+                  <th>ลำดับ</th>
+                  <th>Order</th>
+                  <th>Part</th>
+                  <th class="numeric">ค้างผลิต</th>
+                  <th class="numeric">วันเครื่อง</th>
+                  <th>เริ่ม</th>
+                  <th>จบ</th>
+                  <th>สถานะ</th>
+                </tr>
+              </thead>
+              <tbody id="orderRows"></tbody>
+            </table>
+          </div>
         </section>
 
         <section class="table-wrap" aria-label="Machine summary table">
@@ -73,11 +127,11 @@
             <thead>
               <tr>
                 <th>Machine</th>
-                <th>Orders</th>
-                <th>Order Qty</th>
-                <th>Remain</th>
-                <th>Forecast Days</th>
-                <th>Utilization</th>
+                <th class="numeric">Orders</th>
+                <th class="numeric">Remain</th>
+                <th class="numeric">Machine Days</th>
+                <th class="numeric">Capacity/day</th>
+                <th>Finish</th>
                 <th>Status</th>
               </tr>
             </thead>
