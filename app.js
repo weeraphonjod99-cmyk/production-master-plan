@@ -168,6 +168,8 @@ const scheduleBoard = document.querySelector("#scheduleBoard");
 const detailTitle = document.querySelector("#detailTitle");
 const machineInsights = document.querySelector("#machineInsights");
 const orderCards = document.querySelector("#orderCards");
+const orderSearchInput = document.querySelector("#orderSearchInput");
+const orderSearchCount = document.querySelector("#orderSearchCount");
 const addOrderButton = document.querySelector("#addOrderButton");
 const savePlanButton = document.querySelector("#savePlanButton");
 const resetPlanButton = document.querySelector("#resetPlanButton");
@@ -541,8 +543,15 @@ function selectedSchedule(items) {
   return schedules.find((schedule) => schedule.machine === forcedMachine) ?? items[0] ?? schedules[0];
 }
 
+function orderMatchesDetailSearch(order, query) {
+  if (!query) return true;
+  return `${order.orderNo} ${order.partName} ${order.partNo}`.toLowerCase().includes(query);
+}
+
 function renderMachineDetail(schedule) {
   activeMachine = schedule.machine;
+  const orderQuery = orderSearchInput.value.trim().toLowerCase();
+  const visibleOrders = schedule.orders.filter((order) => orderMatchesDetailSearch(order, orderQuery));
   detailTitle.textContent = schedule.machine;
   machineInsights.innerHTML = `
     <span>${numberFormat.format(schedule.orders.length)} orders</span>
@@ -550,16 +559,19 @@ function renderMachineDetail(schedule) {
     <span>${numberFormat.format(Math.round(schedule.capacityPerDay))} pcs/วัน</span>
     <span>จบ ${formatDate(schedule.finishDate)}</span>
   `;
+  orderSearchCount.textContent = orderQuery
+    ? `${numberFormat.format(visibleOrders.length)} / ${numberFormat.format(schedule.orders.length)} orders`
+    : `${numberFormat.format(schedule.orders.length)} orders`;
 
-  orderCards.innerHTML = schedule.orders.slice(0, 4).map((order) => `
+  orderCards.innerHTML = visibleOrders.slice(0, 4).map((order) => `
     <article class="order-card">
       <span>${escapeHtml(order.orderNo)}</span>
       <strong>${escapeHtml(order.partName)}</strong>
       <small>${numberFormat.format(order.remaining)} pcs · ${formatMachineDays(order.machineDays)} วัน · จบ ${formatDateShort(order.finishDate)}</small>
     </article>
-  `).join("");
+  `).join("") || '<div class="empty-state order-empty">ไม่พบออเดอร์ที่ค้นหา</div>';
 
-  orderRows.innerHTML = schedule.orders.map((order) => `
+  orderRows.innerHTML = visibleOrders.map((order) => `
     <tr>
       <td>${numberFormat.format(order.sequence)}</td>
       <td>${escapeHtml(order.orderNo)}</td>
@@ -584,7 +596,11 @@ function renderMachineDetail(schedule) {
         </div>
       </td>
     </tr>
-  `).join("");
+  `).join("") || `
+    <tr>
+      <td colspan="10" class="empty-cell">ไม่พบออเดอร์ที่ค้นหา</td>
+    </tr>
+  `;
 }
 
 function refreshPlanner(message) {
@@ -694,10 +710,12 @@ render();
 setSaveStatus(getStorage()?.getItem(storageKey) ? "โหลดแผนที่แก้ไว้" : "พร้อมแก้แผน");
 
 searchInput.addEventListener("input", render);
+orderSearchInput.addEventListener("input", render);
 statusFilter.addEventListener("change", render);
 machineFilter.addEventListener("change", render);
 resetButton.addEventListener("click", () => {
   searchInput.value = "";
+  orderSearchInput.value = "";
   statusFilter.value = "all";
   machineFilter.value = "all";
   render();
