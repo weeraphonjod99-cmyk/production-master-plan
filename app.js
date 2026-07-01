@@ -313,6 +313,20 @@ function formatMachineDays(value) {
   return dayFormat.format(Math.max(0.1, value));
 }
 
+function orderLabel(order) {
+  return order.orderNo === "WIP" ? `${order.partName} (${order.partNo})` : order.orderNo;
+}
+
+function orderTooltip(order) {
+  return [
+    `Order: ${order.orderNo}`,
+    `Part: ${order.partName}`,
+    `Part No.: ${order.partNo}`,
+    `Qty: ${numberFormat.format(order.remaining)} pcs`,
+    `Days: ${formatMachineDays(order.machineDays)}`
+  ].join("\n");
+}
+
 function buildSchedules(planOrders = plannerOrders) {
   const ordersByMachine = new Map();
   for (const order of planOrders) {
@@ -505,10 +519,10 @@ function renderScheduleBoard(items) {
                     draggable="true"
                     data-order-id="${escapeHtml(order.id)}"
                     data-machine="${escapeHtml(schedule.machine)}"
+                    data-tooltip="${escapeHtml(orderTooltip(order))}"
                     style="grid-column:${order.start} / span ${span}; grid-row:${order.lane}; --order-color:${order.color}"
-                    title="${escapeHtml(order.orderNo)} · ${escapeHtml(order.partName)} · ${formatMachineDays(order.machineDays)} วัน"
                   >
-                    <span>${escapeHtml(order.orderNo)}</span>
+                    <span>${escapeHtml(orderLabel(order))}</span>
                   </button>
                 `;
               })
