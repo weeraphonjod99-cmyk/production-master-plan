@@ -21,6 +21,9 @@
             <a class="button" href="https://docs.google.com/spreadsheets/d/1iedzv4R7oyw1x7mjAAsAGlVHan7eFBAOVfgaoIWYWkU/edit#gid=424242003" target="_blank" rel="noreferrer">
               Machine Summary
             </a>
+            <button class="button" id="addOrderButton" type="button">+ เพิ่มออเดอร์</button>
+            <button class="button" id="savePlanButton" type="button">บันทึกแผน</button>
+            <button class="button danger" id="resetPlanButton" type="button">รีเซ็ตแผน</button>
           </div>
         </div>
 
@@ -78,6 +81,10 @@
           <div class="lane-track" id="laneTrack"></div>
         </section>
 
+        <section class="edit-strip" aria-label="Editable planning status">
+          <span id="saveStatus">พร้อมแก้แผน</span>
+        </section>
+
         <section class="schedule-panel" aria-label="Monthly machine plan">
           <div class="section-heading">
             <div>
@@ -115,6 +122,8 @@
                   <th>เริ่ม</th>
                   <th>จบ</th>
                   <th>สถานะ</th>
+                  <th>ย้ายไป</th>
+                  <th>ลำดับ</th>
                 </tr>
               </thead>
               <tbody id="orderRows"></tbody>
@@ -140,6 +149,48 @@
         </section>
       </section>
     </main>
+
+    <dialog class="order-dialog" id="orderDialog">
+      <form id="addOrderForm" class="order-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">Production Order</p>
+            <h2>เพิ่มออเดอร์ผลิต</h2>
+          </div>
+          <button class="icon-button" id="cancelOrderButton" type="button" title="ปิด">×</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            <span>เครื่องจักร</span>
+            <select id="newOrderMachine" required></select>
+          </label>
+          <label>
+            <span>Order No.</span>
+            <input id="newOrderNo" type="text" placeholder="เช่น TH-SCDD..." required />
+          </label>
+          <label>
+            <span>Part Name</span>
+            <input id="newOrderPart" type="text" placeholder="ชื่อชิ้นงาน" required />
+          </label>
+          <label>
+            <span>Part No.</span>
+            <input id="newOrderPartNo" type="text" placeholder="รหัสชิ้นงาน" />
+          </label>
+          <label>
+            <span>จำนวนผลิต</span>
+            <input id="newOrderQty" type="number" min="1" step="1" placeholder="0" required />
+          </label>
+          <label>
+            <span>วันที่เปิด</span>
+            <input id="newOrderDate" type="date" value="2026-07-01" />
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <button class="button" type="button" id="dismissOrderButton">ยกเลิก</button>
+          <button class="button primary" type="submit">เพิ่มเข้าแผน</button>
+        </div>
+      </form>
+    </dialog>
     <script src="./app.js"></script>
   </body>
 </html>

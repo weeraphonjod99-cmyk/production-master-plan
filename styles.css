@@ -113,6 +113,11 @@ h2 {
   color: #ffffff;
 }
 
+.button.danger {
+  border-color: #f1b8b3;
+  color: var(--red);
+}
+
 .button.compact {
   min-height: 36px;
 }
@@ -150,6 +155,7 @@ h2 {
 
 .control-panel,
 .status-strip,
+.edit-strip,
 .table-wrap,
 .schedule-panel,
 .detail-panel {
@@ -157,6 +163,18 @@ h2 {
   border-radius: 8px;
   background: var(--panel);
   padding: 14px;
+}
+
+.edit-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+}
+
+.edit-strip span {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .search-field,
@@ -389,6 +407,11 @@ select {
     #ffffff;
 }
 
+.timeline-grid.drag-over {
+  border-color: var(--blue);
+  box-shadow: inset 0 0 0 2px rgba(40, 94, 154, 0.18);
+}
+
 .order-block {
   min-width: 0;
   overflow: hidden;
@@ -404,6 +427,10 @@ select {
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.order-block.dragging {
+  opacity: 0.45;
 }
 
 .order-block.is-over {
@@ -504,6 +531,89 @@ th.numeric {
   font-size: 12px;
 }
 
+.inline-select {
+  width: 170px;
+  min-width: 170px;
+  height: 32px;
+  font-size: 12px;
+}
+
+.order-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.icon-button:hover,
+.button:hover,
+.lane:hover,
+.machine-label:hover,
+.order-block:hover {
+  border-color: var(--blue);
+}
+
+.order-dialog {
+  width: min(620px, calc(100% - 28px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0;
+  color: var(--text);
+}
+
+.order-dialog::backdrop {
+  background: rgba(20, 28, 36, 0.42);
+}
+
+.order-form {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  background: var(--panel);
+}
+
+.dialog-heading,
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.form-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.form-grid span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.form-grid input,
+.form-grid select {
+  width: 100%;
+  min-width: 0;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
@@ -543,7 +653,8 @@ th.numeric {
 
   .actions,
   .control-panel,
-  .detail-kpis {
+  .detail-kpis,
+  .dialog-actions {
     align-items: stretch;
   }
 
@@ -560,6 +671,14 @@ th.numeric {
 
   .status-strip {
     grid-template-columns: 1fr;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dialog-actions {
+    flex-direction: column-reverse;
   }
 }
 

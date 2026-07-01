@@ -2,6 +2,7 @@ const sheetUrl = "https://docs.google.com/spreadsheets/d/1iedzv4R7oyw1x7mjAAsAGl
 
 const planStart = new Date(2026, 6, 1);
 const planDays = 31;
+const storageKey = "production-master-plan-orders-v2";
 
 const machineSummary = [
   { machine: "10# OCP-260 T", orders: 30, remain: 18282, forecastDays: 24 },
@@ -167,19 +168,28 @@ const scheduleBoard = document.querySelector("#scheduleBoard");
 const detailTitle = document.querySelector("#detailTitle");
 const machineInsights = document.querySelector("#machineInsights");
 const orderCards = document.querySelector("#orderCards");
+const addOrderButton = document.querySelector("#addOrderButton");
+const savePlanButton = document.querySelector("#savePlanButton");
+const resetPlanButton = document.querySelector("#resetPlanButton");
+const saveStatus = document.querySelector("#saveStatus");
+const orderDialog = document.querySelector("#orderDialog");
+const addOrderForm = document.querySelector("#addOrderForm");
+const newOrderMachine = document.querySelector("#newOrderMachine");
+const cancelOrderButton = document.querySelector("#cancelOrderButton");
+const dismissOrderButton = document.querySelector("#dismissOrderButton");
 
 const numberFormat = new Intl.NumberFormat("th-TH");
 const dayFormat = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 1 });
 const percentFormat = new Intl.NumberFormat("th-TH", { style: "percent", maximumFractionDigits: 0 });
 const palette = ["#3b6ea8", "#197a56", "#9b6a00", "#8f4f9f", "#c44b2f", "#2f7f8f", "#5f6b2e", "#7562a9"];
 
-const orders = orderText
+const sourceOrders = orderText
   .trim()
   .split("\n")
   .map((line, index) => {
     const [machine, openDate, orderNo, partName, partNo, qty] = line.split("|");
     return {
-      id: `${machine}-${index}`,
+      id: `base-${index}`,
       machine,
       openDate,
       orderNo,
@@ -191,12 +201,70 @@ const orders = orderText
     };
   });
 
-const schedules = buildSchedules();
+let plannerOrders = loadPlannerOrders();
+let schedules = buildSchedules();
 let activeMachine = "11# 200T";
 
 function parseNumber(value) {
   const number = Number(String(value ?? "").replace(/[^\d.-]/g, ""));
   return Number.isFinite(number) ? number : 0;
+}
+
+function cloneOrder(order) {
+  return {
+    id: order.id,
+    machine: order.machine,
+    openDate: order.openDate,
+    orderNo: order.orderNo,
+    partName: order.partName,
+    partNo: order.partNo,
+    qty: Number(order.qty) || 0,
+    remaining: Number(order.remaining ?? order.qty) || 0,
+    sourceIndex: Number(order.sourceIndex) || 0,
+    created: Boolean(order.created)
+  };
+}
+
+function getStorage() {
+  try {
+    return typeof window !== "undefined" ? window.localStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+function loadPlannerOrders() {
+  const storage = getStorage();
+  if (!storage) return sourceOrders.map(cloneOrder);
+
+  try {
+    const stored = JSON.parse(storage.getItem(storageKey) || "null");
+    if (!Array.isArray(stored) || !stored.length) return sourceOrders.map(cloneOrder);
+    return stored
+      .filter((order) => order && order.id && order.machine && order.orderNo)
+      .map((order, index) => ({
+        ...cloneOrder(order),
+        sourceIndex: Number.isFinite(Number(order.sourceIndex)) ? Number(order.sourceIndex) : index
+      }));
+  } catch {
+    return sourceOrders.map(cloneOrder);
+  }
+}
+
+function setSaveStatus(message) {
+  if (!saveStatus) return;
+  saveStatus.textContent = message;
+}
+
+function savePlannerOrders(message = "บันทึกแผนแล้ว") {
+  const storage = getStorage();
+  if (storage) storage.setItem(storageKey, JSON.stringify(plannerOrders));
+  setSaveStatus(message);
+}
+
+function clearPlannerOrders() {
+  const storage = getStorage();
+  if (storage) storage.removeItem(storageKey);
 }
 
 function addDays(date, days) {
@@ -243,9 +311,9 @@ function formatMachineDays(value) {
   return dayFormat.format(Math.max(0.1, value));
 }
 
-function buildSchedules() {
+function buildSchedules(planOrders = plannerOrders) {
   const ordersByMachine = new Map();
-  for (const order of orders) {
+  for (const order of planOrders) {
     if (!ordersByMachine.has(order.machine)) ordersByMachine.set(order.machine, []);
     ordersByMachine.get(order.machine).push(order);
   }
@@ -253,8 +321,7 @@ function buildSchedules() {
   return machineSummary.map((summary, machineIndex) => {
     const machineOrders = ordersByMachine.get(summary.machine) ?? [];
     const totalRemain = machineOrders.reduce((sum, order) => sum + order.remaining, 0);
-    const plannedDays = summary.forecastDays || (totalRemain > 0 ? 1 : 0);
-    const capacityPerDay = plannedDays ? totalRemain / plannedDays : 0;
+    const capacityPerDay = summary.forecastDays ? summary.remain / summary.forecastDays : totalRemain || 1;
     let cursor = 0;
 
     const scheduledOrders = machineOrders.map((order, orderIndex) => {
@@ -278,7 +345,7 @@ function buildSchedules() {
       };
     });
 
-    const totalDays = Math.max(plannedDays, cursor);
+    const totalDays = cursor;
     const utilization = totalDays / planDays;
     const overDays = Math.max(0, Math.ceil(totalDays - planDays));
     const idleDays = Math.max(0, Math.floor(planDays - totalDays));
@@ -299,11 +366,25 @@ function buildSchedules() {
   });
 }
 
-function populateMachineFilter() {
+function machineOptionList(selectedMachine = "") {
+  return machineSummary
+    .map((summary) => {
+      const selected = summary.machine === selectedMachine ? " selected" : "";
+      return `<option value="${escapeHtml(summary.machine)}"${selected}>${escapeHtml(summary.machine)}</option>`;
+    })
+    .join("");
+}
+
+function populateMachineFilter(selectedValue = machineFilter.value || "all") {
   machineFilter.innerHTML = [
-    '<option value="all">ทุกเครื่อง</option>',
-    ...schedules.map((schedule) => `<option value="${escapeHtml(schedule.machine)}">${escapeHtml(schedule.machine)}</option>`)
+    `<option value="all"${selectedValue === "all" ? " selected" : ""}>ทุกเครื่อง</option>`,
+    machineOptionList(selectedValue)
   ].join("");
+}
+
+function populateNewOrderMachine(selectedMachine = activeMachine) {
+  if (!newOrderMachine) return;
+  newOrderMachine.innerHTML = machineOptionList(selectedMachine);
 }
 
 function matchesQuery(schedule, query) {
@@ -411,7 +492,7 @@ function renderScheduleBoard(items) {
             <strong>${escapeHtml(schedule.machine)}</strong>
             <span>${schedule.orders.length} orders · ${formatMachineDays(schedule.totalDays)} วัน ${overNote}</span>
           </button>
-          <div class="timeline-grid" style="--lane-count:${laneCount}">
+          <div class="timeline-grid" data-drop-machine="${escapeHtml(schedule.machine)}" style="--lane-count:${laneCount}">
             ${stacked
               .map((order) => {
                 const span = Math.max(1, order.end - order.start + 1);
@@ -419,6 +500,8 @@ function renderScheduleBoard(items) {
                   <button
                     class="order-block ${order.overMonth ? "is-over" : ""}"
                     type="button"
+                    draggable="true"
+                    data-order-id="${escapeHtml(order.id)}"
                     data-machine="${escapeHtml(schedule.machine)}"
                     style="grid-column:${order.start} / span ${span}; grid-row:${order.lane}; --order-color:${order.color}"
                     title="${escapeHtml(order.orderNo)} · ${escapeHtml(order.partName)} · ${formatMachineDays(order.machineDays)} วัน"
@@ -489,8 +572,101 @@ function renderMachineDetail(schedule) {
       <td>${formatDate(order.startDate)}</td>
       <td>${formatDate(order.finishDate)}</td>
       <td><span class="pill ${order.overMonth ? "over" : "ok"}">${order.overMonth ? "ล้นเดือน" : "ในเดือน"}</span></td>
+      <td>
+        <select class="inline-select" data-order-machine="${escapeHtml(order.id)}">
+          ${machineOptionList(order.machine)}
+        </select>
+      </td>
+      <td>
+        <div class="order-actions">
+          <button class="icon-button" type="button" data-reorder-order="${escapeHtml(order.id)}" data-direction="up" title="เลื่อนขึ้น">↑</button>
+          <button class="icon-button" type="button" data-reorder-order="${escapeHtml(order.id)}" data-direction="down" title="เลื่อนลง">↓</button>
+        </div>
+      </td>
     </tr>
   `).join("");
+}
+
+function refreshPlanner(message) {
+  const selectedValue = machineFilter.value;
+  schedules = buildSchedules();
+  populateMachineFilter(selectedValue);
+  populateNewOrderMachine(activeMachine);
+  render();
+  if (message) setSaveStatus(message);
+}
+
+function findOrderIndex(orderId) {
+  return plannerOrders.findIndex((order) => order.id === orderId);
+}
+
+function moveOrderToMachine(orderId, targetMachine) {
+  if (!machineSummary.some((summary) => summary.machine === targetMachine)) return;
+  const orderIndex = findOrderIndex(orderId);
+  if (orderIndex < 0) return;
+
+  const [order] = plannerOrders.splice(orderIndex, 1);
+  order.machine = targetMachine;
+  const lastTargetIndex = plannerOrders.reduce((lastIndex, currentOrder, index) => {
+    return currentOrder.machine === targetMachine ? index : lastIndex;
+  }, -1);
+
+  plannerOrders.splice(lastTargetIndex + 1, 0, order);
+  activeMachine = targetMachine;
+  machineFilter.value = targetMachine;
+  savePlannerOrders("ย้ายออเดอร์แล้ว");
+  refreshPlanner();
+}
+
+function reorderOrder(orderId, direction) {
+  const orderIndex = findOrderIndex(orderId);
+  if (orderIndex < 0) return;
+  const machine = plannerOrders[orderIndex].machine;
+  const machineOrderIndexes = plannerOrders
+    .map((order, index) => ({ order, index }))
+    .filter((item) => item.order.machine === machine)
+    .map((item) => item.index);
+  const position = machineOrderIndexes.indexOf(orderIndex);
+  const targetPosition = direction === "up" ? position - 1 : position + 1;
+  if (targetPosition < 0 || targetPosition >= machineOrderIndexes.length) return;
+
+  const targetIndex = machineOrderIndexes[targetPosition];
+  [plannerOrders[orderIndex], plannerOrders[targetIndex]] = [plannerOrders[targetIndex], plannerOrders[orderIndex]];
+  activeMachine = machine;
+  savePlannerOrders("จัดลำดับออเดอร์แล้ว");
+  refreshPlanner();
+}
+
+function addPlannerOrder(event) {
+  event.preventDefault();
+  const qty = parseNumber(document.querySelector("#newOrderQty").value);
+  if (qty <= 0) {
+    setSaveStatus("ใส่จำนวนผลิตมากกว่า 0");
+    return;
+  }
+
+  const machine = newOrderMachine.value;
+  const order = {
+    id: `new-${Date.now()}`,
+    machine,
+    openDate: document.querySelector("#newOrderDate").value || formatDate(planStart),
+    orderNo: document.querySelector("#newOrderNo").value.trim(),
+    partName: document.querySelector("#newOrderPart").value.trim(),
+    partNo: document.querySelector("#newOrderPartNo").value.trim() || "-",
+    qty,
+    remaining: qty,
+    sourceIndex: plannerOrders.length,
+    created: true
+  };
+
+  plannerOrders.push(order);
+  activeMachine = machine;
+  machineFilter.value = machine;
+  savePlannerOrders("เพิ่มออเดอร์แล้ว");
+  addOrderForm.reset();
+  populateNewOrderMachine(machine);
+  orderDialog.close();
+  refreshPlanner();
 }
 
 function render() {
@@ -512,8 +688,10 @@ function setActiveMachine(machine) {
 }
 
 populateMachineFilter();
+populateNewOrderMachine();
 renderCalendarHeader();
 render();
+setSaveStatus(getStorage()?.getItem(storageKey) ? "โหลดแผนที่แก้ไว้" : "พร้อมแก้แผน");
 
 searchInput.addEventListener("input", render);
 statusFilter.addEventListener("change", render);
@@ -525,7 +703,73 @@ resetButton.addEventListener("click", () => {
   render();
 });
 
+addOrderButton.addEventListener("click", () => {
+  populateNewOrderMachine(activeMachine);
+  orderDialog.showModal();
+});
+
+cancelOrderButton.addEventListener("click", () => orderDialog.close());
+dismissOrderButton.addEventListener("click", () => orderDialog.close());
+addOrderForm.addEventListener("submit", addPlannerOrder);
+
+savePlanButton.addEventListener("click", () => savePlannerOrders("บันทึกแผนแล้ว"));
+resetPlanButton.addEventListener("click", () => {
+  if (typeof window !== "undefined" && !window.confirm("รีเซ็ตกลับข้อมูลตั้งต้นทั้งหมด?")) return;
+  plannerOrders = sourceOrders.map(cloneOrder);
+  clearPlannerOrders();
+  activeMachine = "11# 200T";
+  machineFilter.value = "all";
+  refreshPlanner("รีเซ็ตแผนแล้ว");
+});
+
+document.addEventListener("dragstart", (event) => {
+  const block = event.target.closest("[data-order-id]");
+  if (!block) return;
+  event.dataTransfer.setData("text/plain", block.dataset.orderId);
+  event.dataTransfer.effectAllowed = "move";
+  block.classList.add("dragging");
+});
+
+document.addEventListener("dragend", (event) => {
+  event.target.closest("[data-order-id]")?.classList.remove("dragging");
+  document.querySelectorAll(".timeline-grid.drag-over").forEach((grid) => grid.classList.remove("drag-over"));
+});
+
+document.addEventListener("dragover", (event) => {
+  const targetGrid = event.target.closest("[data-drop-machine]");
+  if (!targetGrid) return;
+  event.preventDefault();
+  targetGrid.classList.add("drag-over");
+});
+
+document.addEventListener("dragleave", (event) => {
+  const targetGrid = event.target.closest("[data-drop-machine]");
+  if (!targetGrid || targetGrid.contains(event.relatedTarget)) return;
+  targetGrid.classList.remove("drag-over");
+});
+
+document.addEventListener("drop", (event) => {
+  const targetGrid = event.target.closest("[data-drop-machine]");
+  if (!targetGrid) return;
+  event.preventDefault();
+  targetGrid.classList.remove("drag-over");
+  const orderId = event.dataTransfer.getData("text/plain");
+  moveOrderToMachine(orderId, targetGrid.dataset.dropMachine);
+});
+
+document.addEventListener("change", (event) => {
+  const selector = event.target.closest("[data-order-machine]");
+  if (!selector) return;
+  moveOrderToMachine(selector.dataset.orderMachine, selector.value);
+});
+
 document.addEventListener("click", (event) => {
+  const reorderButton = event.target.closest("[data-reorder-order]");
+  if (reorderButton) {
+    reorderOrder(reorderButton.dataset.reorderOrder, reorderButton.dataset.direction);
+    return;
+  }
+
   const target = event.target.closest("[data-machine]");
   if (!target) return;
   setActiveMachine(target.dataset.machine);
