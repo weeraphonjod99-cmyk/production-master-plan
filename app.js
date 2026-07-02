@@ -1,4 +1,4 @@
-const planData = window.PRODUCTION_PLAN_DATA ?? {
+let planData = window.PRODUCTION_PLAN_DATA ?? {
   sourceUrl: "#",
   generatedAt: "",
   planYear: 2026,
@@ -15,6 +15,58 @@ const planEnd = addDays(planStart, planDays - 1);
 const orderStorageKey = `production-master-plan-orders-${planData.planYear}-${planData.planMonth}-v3`;
 const capacityStorageKey = `production-master-plan-capacity-${planData.planYear}-${planData.planMonth}-v1`;
 const activeMachineKey = "production-master-plan-active-machine-v1";
+const liveSheetConfig = {
+  spreadsheetId: "1gR-a77vkgVxDu0jdSZ9RPhnGLC5OabIRHSRGBN0hZ18",
+  refreshMs: 60000,
+  retryMs: 300000,
+  range: "A1:W1000",
+  sheets: [
+    "#1 Arc \u00b7Stack",
+    "#2 Arc \u00b7Stack",
+    "#3 Cut Chamber",
+    "#4 GV2",
+    "#5 Arc Chute",
+    "#6 Arc Chute",
+    "#7 Arc Chute",
+    "#8 Arc Chute",
+    "1#-OCP-80T",
+    "2# MHS-80T",
+    "3# OCP-110T",
+    "4# SN1-110T",
+    "5# OCP-110T",
+    "6# STD-150T",
+    "7# GTX-300T",
+    "8# GTX-500T",
+    "9# OCP-110T",
+    "10# OCP-260 T",
+    "11# 200T",
+    "12# 200T",
+    "#1 RW",
+    "#2 RW",
+    "#3 RW",
+    "#8 Rubber Cap",
+    "Bending #1",
+    "Bending #2",
+    "Tapping",
+    "Riveting",
+    "CNC-C1",
+    "CNC-C2",
+    "CNC-C3",
+    "CNC-C4",
+    "CNC-C5",
+    "CNC-C6",
+    "RV1",
+    "RV2",
+    "SW1# spot",
+    "SW#2 Spot",
+    "SW#3 Spot",
+    "SW4 NMS",
+    "SW5 CU",
+    "SW6 NLC",
+    "SW7 LC 600",
+    "SW8 Door LC"
+  ]
+};
 
 const palette = ["#2f6f8f", "#1f7a5a", "#a46819", "#7558a7", "#b84f3a", "#496a38", "#3b67a0", "#8a4d7b"];
 const numberFormat = new Intl.NumberFormat("th-TH");
@@ -37,31 +89,8 @@ const monthNames = [
   "ธันวาคม"
 ];
 
-const machines = planData.machines.map((machine, index) => ({
-  name: machine.name,
-  defaultCapacity: Number(machine.defaultCapacity) || 1000,
-  sheetOrder: Number(machine.sheetOrder ?? index)
-}));
-
-const sourceOrders = planData.orders.map((order, index) => ({
-  id: order.id || `base-${index}`,
-  machine: order.machine,
-  openDate: order.openDate || "",
-  orderNo: order.orderNo || "-",
-  partName: order.partName || "-",
-  partNo: order.partNo || "",
-  rmNo: order.rmNo || "",
-  qty: parseNumber(order.qty),
-  unit: order.unit || "pcs",
-  dueDate: order.dueDate || "",
-  plannedStart: order.plannedStart || "",
-  plannedFinish: order.plannedFinish || "",
-  produced: parseNumber(order.produced),
-  remaining: parseNumber(order.remaining || order.qty),
-  productionStatus: order.productionStatus || "",
-  progress: order.progress || "",
-  sourceIndex: Number(order.sourceIndex ?? index)
-}));
+let machines = buildMachines(planData);
+let sourceOrders = buildSourceOrders(planData);
 
 const machineCount = document.querySelector("#machineCount");
 const busyMachineCount = document.querySelector("#busyMachineCount");
@@ -100,12 +129,311 @@ let schedules = buildSchedules();
 let activeMachine = pickInitialMachine();
 
 sourceSheetLink.href = planData.sourceUrl;
-dataStamp.textContent = `${numberFormat.format(sourceOrders.length)} orders · แผน ${formatDate(planStart)} - ${formatDate(planEnd)} · ${timeFormat.format(currentDateTime)}`;
+updateDataStamp("โหลดข้อมูล snapshot");
 
 function parseNumber(value) {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   const number = Number(String(value ?? "").replace(/[^\d.-]/g, ""));
   return Number.isFinite(number) ? number : 0;
+}
+
+function buildMachines(data) {
+  return (data.machines ?? []).map((machine, index) => ({
+    name: machine.name,
+    defaultCapacity: Number(machine.defaultCapacity) || 1000,
+    sheetOrder: Number(machine.sheetOrder ?? index)
+  }));
+}
+
+function buildSourceOrders(data) {
+  return (data.orders ?? []).map((order, index) => ({
+    id: order.id || `base-${index}`,
+    machine: order.machine,
+    openDate: order.openDate || "",
+    orderNo: order.orderNo || "-",
+    partName: order.partName || "-",
+    partNo: order.partNo || "",
+    rmNo: order.rmNo || "",
+    qty: parseNumber(order.qty),
+    unit: order.unit || "pcs",
+    dueDate: order.dueDate || "",
+    plannedStart: order.plannedStart || "",
+    plannedFinish: order.plannedFinish || "",
+    produced: parseNumber(order.produced),
+    remaining: parseNumber(order.remaining || order.qty),
+    productionStatus: order.productionStatus || "",
+    progress: order.progress || "",
+    sourceIndex: Number(order.sourceIndex ?? index)
+  }));
+}
+
+function cleanText(value) {
+  return String(value ?? "").trim().replace(/\s+/g, " ");
+}
+
+function normalizeHeader(value) {
+  return cleanText(value).toLowerCase().replace(/[.:]/g, "");
+}
+
+function cellText(cell) {
+  return cleanText(cell?.f ?? cell?.v ?? "");
+}
+
+function cellNumber(cell) {
+  if (typeof cell?.v === "number") return Number.isFinite(cell.v) ? cell.v : 0;
+  return parseNumber(cellText(cell));
+}
+
+function normalizeSheetDate(cell) {
+  const raw = cell?.v ?? "";
+  const formatted = cell?.f ?? "";
+  const value = cleanText(raw || formatted);
+  if (!value) return "";
+
+  if (typeof raw === "number" && raw > 20000) {
+    const utc = Date.UTC(1899, 11, 30) + raw * 86400000;
+    return new Date(utc).toISOString().slice(0, 10);
+  }
+
+  const googleDate = String(raw).match(/^Date\((\d{4}),(\d{1,2}),(\d{1,2})\)/);
+  if (googleDate) {
+    const [, year, month, day] = googleDate;
+    return `${year}-${String(Number(month) + 1).padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  const iso = value.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (iso) {
+    const [, year, month, day] = iso;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  const dmy = value.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
+  if (dmy) {
+    const [, day, month, yearText] = dmy;
+    const year = yearText.length === 2 ? `20${yearText}` : yearText;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  return value;
+}
+
+function findHeaderIndex(headers, labels, fallback) {
+  const normalizedLabels = labels.map(normalizeHeader);
+  const index = headers.findIndex((header) => {
+    const normalized = normalizeHeader(header);
+    return normalizedLabels.some((label) => normalized.includes(label));
+  });
+  return index >= 0 ? index : fallback;
+}
+
+function knownCapacityFor(machineName, totalRemain, orderCount) {
+  const existing = machines.find((machine) => machine.name === machineName);
+  if (existing?.defaultCapacity > 0) return existing.defaultCapacity;
+  if (/Bending/i.test(machineName)) return 250;
+  if (/Tapping|Riveting|RV/i.test(machineName)) return 650;
+  if (/CNC/i.test(machineName)) return 900;
+  if (/SW|Spot|NMS|NLC|LC/i.test(machineName)) return 1400;
+  if (/Arc|Chute|Stack|Cut Chamber|GV2/i.test(machineName)) return 850;
+  if (/OCP|MHS|SN1|STD|GTX|80T|110T|150T|200T|260/i.test(machineName)) return 1200;
+  if (!orderCount) return 1000;
+  return Math.max(250, Math.ceil(totalRemain / Math.max(6, Math.min(20, orderCount * 2))));
+}
+
+function tableToOrders(table, machineName, machineIndex) {
+  const rows = table?.rows ?? [];
+  let headers = (table?.cols ?? []).map((column) => cleanText(column?.label || column?.id || ""));
+  let dataRows = rows;
+  const hasUsefulHeaders = headers.some((header) => {
+    const normalized = normalizeHeader(header);
+    return normalized.includes("order") || normalized.includes("part") || header.includes("วันที่") || header.includes("ยอด");
+  });
+
+  if (!hasUsefulHeaders) {
+    const headerRow = rows[0]?.c ?? [];
+    headers = headerRow.map(cellText);
+    dataRows = rows.slice(1);
+  }
+
+  const column = {
+    openDate: findHeaderIndex(headers, ["วันที่เปิด", "open"], 1),
+    orderNo: findHeaderIndex(headers, ["order no"], 2),
+    partName: findHeaderIndex(headers, ["part name"], 3),
+    partNo: findHeaderIndex(headers, ["part no"], 4),
+    rmNo: findHeaderIndex(headers, ["rm no"], 5),
+    qty: findHeaderIndex(headers, ["ยอดสั่งซื้อ", "order qty", "qty"], 6),
+    unit: findHeaderIndex(headers, ["unit"], 7),
+    dueDate: findHeaderIndex(headers, ["วันที่ต้องการ", "due"], 8),
+    shift: findHeaderIndex(headers, ["กะ", "shift"], 9),
+    plannedStart: findHeaderIndex(headers, ["วันที่เริ่ม", "start"], 14),
+    plannedFinish: findHeaderIndex(headers, ["วันที่จบ", "finish"], 15),
+    produced: findHeaderIndex(headers, ["ยอดการผลิต", "ผลิตแล้ว", "produced"], 16),
+    readyForPainting: findHeaderIndex(headers, ["พร้อม", "ready"], 17),
+    remaining: findHeaderIndex(headers, ["ค้างผลิต", "remain"], 18),
+    ngRework: findHeaderIndex(headers, ["ng", "rework"], 19),
+    productionStatus: findHeaderIndex(headers, ["สถานะ", "status"], 20),
+    progress: findHeaderIndex(headers, ["progress"], 21),
+    stock: findHeaderIndex(headers, ["stock"], 22)
+  };
+
+  const orders = [];
+  for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex += 1) {
+    const row = dataRows[rowIndex]?.c ?? [];
+    const orderNo = cellText(row[column.orderNo]);
+    const partNo = cellText(row[column.partNo]);
+    const partName = cellText(row[column.partName]) || partNo || "-";
+    const qty = cellNumber(row[column.qty]);
+    if (!orderNo || qty <= 0 || (!partName && !partNo)) continue;
+
+    const produced = cellNumber(row[column.produced]);
+    const explicitRemain = cellNumber(row[column.remaining]);
+    const remaining = explicitRemain > 0 ? explicitRemain : Math.max(0, qty - produced) || qty;
+
+    orders.push({
+      id: `live-${machineIndex}-${rowIndex + 1}`,
+      machine: machineName,
+      openDate: normalizeSheetDate(row[column.openDate]),
+      orderNo,
+      partName,
+      partNo,
+      rmNo: cellText(row[column.rmNo]),
+      qty,
+      unit: cellText(row[column.unit]) || "pcs",
+      dueDate: normalizeSheetDate(row[column.dueDate]),
+      shift: cellText(row[column.shift]),
+      plannedStart: normalizeSheetDate(row[column.plannedStart]),
+      plannedFinish: normalizeSheetDate(row[column.plannedFinish]),
+      produced,
+      readyForPainting: cellNumber(row[column.readyForPainting]),
+      remaining,
+      ngRework: cellNumber(row[column.ngRework]),
+      productionStatus: cellText(row[column.productionStatus]),
+      progress: cellText(row[column.progress]),
+      stock: cellText(row[column.stock]),
+      sourceIndex: orders.length
+    });
+  }
+  return orders;
+}
+
+function loadGvizTable(sheetName) {
+  return new Promise((resolve, reject) => {
+    const callbackName = `__productionPlan_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const script = document.createElement("script");
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error(`โหลด Google Sheet ไม่สำเร็จ: ${sheetName}`));
+    }, 12000);
+
+    function cleanup() {
+      window.clearTimeout(timeout);
+      delete window[callbackName];
+      script.remove();
+    }
+
+    window[callbackName] = (response) => {
+      cleanup();
+      if (response?.status === "ok" && response.table) {
+        resolve(response.table);
+        return;
+      }
+      reject(new Error(response?.errors?.[0]?.detailed_message || `อ่านชีตไม่ได้: ${sheetName}`));
+    };
+
+    const params = new URLSearchParams({
+      sheet: sheetName,
+      range: liveSheetConfig.range,
+      headers: "1",
+      tqx: `out:json;responseHandler:${callbackName}`,
+      cache: String(Date.now())
+    });
+    script.onerror = () => {
+      cleanup();
+      reject(new Error(`เชื่อมต่อ Google Sheet ไม่ได้: ${sheetName}`));
+    };
+    script.src = `https://docs.google.com/spreadsheets/d/${liveSheetConfig.spreadsheetId}/gviz/tq?${params}`;
+    document.head.appendChild(script);
+  });
+}
+
+async function loadLivePlanData() {
+  const results = await Promise.allSettled(
+    liveSheetConfig.sheets.map((sheetName, index) =>
+      loadGvizTable(sheetName).then((table) => ({ sheetName, index, orders: tableToOrders(table, sheetName, index) }))
+    )
+  );
+  const fulfilled = results
+    .filter((result) => result.status === "fulfilled")
+    .map((result) => result.value);
+
+  if (fulfilled.length < Math.ceil(liveSheetConfig.sheets.length * 0.8)) {
+    throw new Error("Google Sheet ยังไม่อนุญาตให้เว็บอ่านข้อมูลสด");
+  }
+
+  const orders = fulfilled.flatMap((sheet) =>
+    sheet.orders.map((order, sourceIndex) => ({ ...order, sourceIndex }))
+  );
+  let runningIndex = 0;
+  for (const order of orders) {
+    order.id = `live-${runningIndex}`;
+    order.sourceIndex = runningIndex;
+    runningIndex += 1;
+  }
+
+  const machinesFromSheet = liveSheetConfig.sheets.map((sheetName, index) => {
+    const machineOrders = orders.filter((order) => order.machine === sheetName);
+    const totalRemain = machineOrders.reduce((sum, order) => sum + order.remaining, 0);
+    return {
+      name: sheetName,
+      defaultCapacity: knownCapacityFor(sheetName, totalRemain, machineOrders.length),
+      sheetOrder: index
+    };
+  });
+
+  return {
+    sourceUrl: planData.sourceUrl,
+    generatedAt: new Date().toISOString(),
+    planYear: planData.planYear,
+    planMonth: planData.planMonth,
+    machines: machinesFromSheet,
+    orders
+  };
+}
+
+function planSignature(orders) {
+  return orders.map((order) => `${order.machine}|${order.orderNo}|${order.partNo}|${order.qty}|${order.remaining}`).join(";");
+}
+
+function applyLivePlanData(nextPlanData) {
+  const previousSignature = planSignature(sourceOrders);
+  const nextSourceOrders = buildSourceOrders(nextPlanData);
+  const nextSignature = planSignature(nextSourceOrders);
+
+  planData = nextPlanData;
+  machines = buildMachines(planData);
+  sourceOrders = nextSourceOrders;
+  plannerOrders = sourceOrders.map(cloneOrder);
+  schedules = buildSchedules();
+  if (!schedules.some((schedule) => schedule.name === activeMachine)) activeMachine = pickInitialMachine();
+  sourceSheetLink.href = planData.sourceUrl;
+  updateDataStamp("อัปเดตจาก Google Sheet อัตโนมัติ");
+  if (previousSignature !== nextSignature) setSaveStatus("อัปเดตข้อมูลใหม่จาก Google Sheet แล้ว");
+  render();
+}
+
+async function refreshLiveSheet() {
+  try {
+    const nextPlanData = await loadLivePlanData();
+    applyLivePlanData(nextPlanData);
+    window.setTimeout(refreshLiveSheet, liveSheetConfig.refreshMs);
+  } catch (error) {
+    updateDataStamp("รอสิทธิ์อ่าน Google Sheet สด");
+    window.setTimeout(refreshLiveSheet, liveSheetConfig.retryMs);
+  }
+}
+
+function updateDataStamp(status = "") {
+  const suffix = status ? ` · ${status}` : "";
+  dataStamp.textContent = `${numberFormat.format(sourceOrders.length)} orders · แผน ${formatDate(planStart)} - ${formatDate(planEnd)} · ${timeFormat.format(new Date())}${suffix}`;
 }
 
 function getStorage() {
@@ -772,6 +1100,7 @@ function addPlannerOrder(event) {
 
 renderCalendarHeader();
 render();
+refreshLiveSheet();
 
 globalSearch.addEventListener("input", render);
 statusFilter.addEventListener("change", render);
