@@ -12,8 +12,8 @@
         <header class="topbar">
           <div>
             <p class="eyebrow">Production Master Plan</p>
-            <h1 id="page-title">วางแผนการผลิตรายเดือนตามเครื่องจักร</h1>
-            <p class="subtitle">ข้อมูลจาก Planing Production สำหรับภาพรวมโหลดงานรายเครื่อง</p>
+            <h1 id="page-title">วางแผนการผลิต 30 วันตามเครื่องจักร</h1>
+            <p class="subtitle">ข้อมูลจาก Planing Production สำหรับภาพรวมโหลดงาน 30 วันรายเครื่อง</p>
           </div>
           <div class="actions">
             <a class="button primary" id="sourceSheetLink" href="#" target="_blank" rel="noreferrer">เปิด Google Sheet</a>
@@ -37,7 +37,7 @@
             <strong id="orderCount">0</strong>
           </article>
           <article class="metric warning">
-            <span>เครื่องเกินเดือน</span>
+            <span>เครื่องเกิน 30 วัน</span>
             <strong id="overCapacity">0</strong>
           </article>
         </section>
@@ -64,7 +64,7 @@
               <span>สถานะ</span>
               <select id="statusFilter">
                 <option value="all">ทั้งหมด</option>
-                <option value="Over capacity">เกินเดือน</option>
+                <option value="Over capacity">เกิน 30 วัน</option>
                 <option value="Tight">แน่น</option>
                 <option value="OK">OK</option>
                 <option value="No order">ยังไม่มีงาน</option>
@@ -89,16 +89,16 @@
               </div>
             </section>
 
-            <section class="timeline-card" aria-label="แผนรายเดือนของเครื่อง">
+            <section class="timeline-card" aria-label="แผน 30 วันของเครื่อง">
               <div class="section-heading">
                 <div>
-                  <p class="eyebrow">Monthly View</p>
-                  <h2>ภาพรวมงานรายเดือน</h2>
+                  <p class="eyebrow">Rolling 30 Days</p>
+                  <h2>ภาพรวมงาน 30 วัน</h2>
                 </div>
                 <div class="legend" aria-label="คำอธิบายสี">
-                  <span><i class="legend-dot ok"></i>ในเดือน</span>
+                  <span><i class="legend-dot ok"></i>ใน 30 วัน</span>
                   <span><i class="legend-dot tight"></i>แน่น</span>
-                  <span><i class="legend-dot over"></i>ล้นเดือน</span>
+                  <span><i class="legend-dot over"></i>เกิน 30 วัน</span>
                 </div>
               </div>
               <div class="calendar-header" id="calendarHeader"></div>

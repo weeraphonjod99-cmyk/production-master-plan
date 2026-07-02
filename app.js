@@ -7,8 +7,11 @@ const planData = window.PRODUCTION_PLAN_DATA ?? {
   orders: []
 };
 
-const planStart = new Date(planData.planYear, planData.planMonth - 1, 1);
-const planDays = new Date(planData.planYear, planData.planMonth, 0).getDate();
+const visiblePlanDays = 30;
+const currentDateTime = new Date();
+const planStart = startOfDay(currentDateTime);
+const planDays = visiblePlanDays;
+const planEnd = addDays(planStart, planDays - 1);
 const orderStorageKey = `production-master-plan-orders-${planData.planYear}-${planData.planMonth}-v3`;
 const capacityStorageKey = `production-master-plan-capacity-${planData.planYear}-${planData.planMonth}-v1`;
 const activeMachineKey = "production-master-plan-active-machine-v1";
@@ -17,6 +20,8 @@ const palette = ["#2f6f8f", "#1f7a5a", "#a46819", "#7558a7", "#b84f3a", "#496a38
 const numberFormat = new Intl.NumberFormat("th-TH");
 const dayFormat = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 1 });
 const percentFormat = new Intl.NumberFormat("th-TH", { style: "percent", maximumFractionDigits: 0 });
+const weekdayFormat = new Intl.DateTimeFormat("th-TH", { weekday: "short" });
+const timeFormat = new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" });
 const monthNames = [
   "มกราคม",
   "กุมภาพันธ์",
@@ -95,7 +100,7 @@ let schedules = buildSchedules();
 let activeMachine = pickInitialMachine();
 
 sourceSheetLink.href = planData.sourceUrl;
-dataStamp.textContent = `${numberFormat.format(sourceOrders.length)} orders · ${monthNames[planData.planMonth - 1]} ${planData.planYear}`;
+dataStamp.textContent = `${numberFormat.format(sourceOrders.length)} orders · แผน ${formatDate(planStart)} - ${formatDate(planEnd)} · ${timeFormat.format(currentDateTime)}`;
 
 function parseNumber(value) {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
@@ -182,6 +187,12 @@ function setSaveStatus(message) {
   saveStatus.textContent = message;
 }
 
+function startOfDay(date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
 function addDays(date, days) {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
@@ -193,6 +204,19 @@ function formatDate(date) {
   const day = String(date.getDate()).padStart(2, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
   return `${day}/${month}/${date.getFullYear()}`;
+}
+
+function formatShortDate(date) {
+  if (!date) return "-";
+  return `${date.getDate()}/${date.getMonth() + 1}`;
+}
+
+function dateToIso(date) {
+  if (!date) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function isoToDate(iso) {
@@ -228,14 +252,14 @@ function statusClass(status) {
 }
 
 function statusText(status) {
-  if (status === "Over capacity") return "เกินเดือน";
+  if (status === "Over capacity") return "เกิน 30 วัน";
   if (status === "Tight") return "แน่น";
   if (status === "No order") return "ยังไม่มีงาน";
   return "OK";
 }
 
 function orderStatusText(order) {
-  return order.overMonth ? "ล้นเดือน" : "ในเดือน";
+  return order.overMonth ? "เกิน 30 วัน" : "ใน 30 วัน";
 }
 
 function orderLabel(order) {
@@ -403,8 +427,63 @@ function assignLanes(blocks) {
   });
 }
 
+function isoWeekInfo(date) {
+  const target = startOfDay(date);
+  target.setDate(target.getDate() + 3 - ((target.getDay() + 6) % 7));
+  const weekYear = target.getFullYear();
+  const firstThursday = new Date(weekYear, 0, 4);
+  firstThursday.setDate(firstThursday.getDate() + 3 - ((firstThursday.getDay() + 6) % 7));
+  const week = 1 + Math.round((target - firstThursday) / 604800000);
+  return { week, weekYear };
+}
+
 function renderCalendarHeader() {
-  calendarHeader.innerHTML = Array.from({ length: planDays }, (_, index) => `<span>${index + 1}</span>`).join("");
+  const dates = Array.from({ length: planDays }, (_, index) => addDays(planStart, index));
+  const weekGroups = [];
+
+  dates.forEach((date, index) => {
+    const { week, weekYear } = isoWeekInfo(date);
+    const label = `W${String(week).padStart(2, "0")}`;
+    const last = weekGroups[weekGroups.length - 1];
+    if (last && last.week === week && last.weekYear === weekYear) {
+      last.span += 1;
+      last.endDate = date;
+    } else {
+      weekGroups.push({ week, weekYear, label, start: index + 1, span: 1, startDate: date, endDate: date });
+    }
+  });
+
+  calendarHeader.style.setProperty("--timeline-days", planDays);
+  calendarHeader.innerHTML = `
+    <div class="calendar-week-row" style="--timeline-days:${planDays}">
+      ${weekGroups
+        .map(
+          (group) => `
+            <span
+              class="calendar-week"
+              style="grid-column:${group.start} / span ${group.span}"
+              title="${escapeHtml(formatDate(group.startDate))} - ${escapeHtml(formatDate(group.endDate))}"
+            >
+              ${escapeHtml(group.label)}
+            </span>
+          `
+        )
+        .join("")}
+    </div>
+    <div class="calendar-day-row" style="--timeline-days:${planDays}">
+      ${dates
+        .map((date) => {
+          const isToday = date.getTime() === planStart.getTime() ? " is-today" : "";
+          return `
+            <span class="calendar-day${isToday}" title="${escapeHtml(formatDate(date))}">
+              <strong>${escapeHtml(formatShortDate(date))}</strong>
+              <small>${escapeHtml(weekdayFormat.format(date))}</small>
+            </span>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
 }
 
 function renderMetrics() {
@@ -464,7 +543,7 @@ function renderSelectedTimeline(schedule) {
 
   if (!stacked.length) {
     selectedTimeline.innerHTML = `
-      <div class="timeline-grid empty-drop" data-drop-machine="${escapeHtml(schedule.name)}" style="--lane-count:1">
+      <div class="timeline-grid empty-drop" data-drop-machine="${escapeHtml(schedule.name)}" style="--lane-count:1; --timeline-days:${planDays}">
         <div class="empty-state timeline-empty">ยังไม่มีออเดอร์ในเครื่องนี้</div>
       </div>
     `;
@@ -472,7 +551,7 @@ function renderSelectedTimeline(schedule) {
   }
 
   selectedTimeline.innerHTML = `
-    <div class="timeline-grid" data-drop-machine="${escapeHtml(schedule.name)}" style="--lane-count:${laneCount}">
+    <div class="timeline-grid" data-drop-machine="${escapeHtml(schedule.name)}" style="--lane-count:${laneCount}; --timeline-days:${planDays}">
       ${stacked
         .map((order) => {
           const span = Math.max(1, order.end - order.start + 1);
@@ -666,7 +745,7 @@ function addPlannerOrder(event) {
     machine,
     openDate:
       document.querySelector("#newOrderDate").value ||
-      `${planData.planYear}-${String(planData.planMonth).padStart(2, "0")}-01`,
+      dateToIso(planStart),
     orderNo: document.querySelector("#newOrderNo").value.trim(),
     partName: document.querySelector("#newOrderPart").value.trim(),
     partNo: document.querySelector("#newOrderPartNo").value.trim(),
@@ -714,7 +793,7 @@ capacityInput.addEventListener("change", () => {
 
 addOrderButton.addEventListener("click", () => {
   populateNewOrderMachine(activeMachine);
-  document.querySelector("#newOrderDate").value = `${planData.planYear}-${String(planData.planMonth).padStart(2, "0")}-01`;
+  document.querySelector("#newOrderDate").value = dateToIso(planStart);
   orderDialog.showModal();
 });
 
