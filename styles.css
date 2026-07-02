@@ -460,7 +460,7 @@ select {
 .selected-timeline {
   overflow-x: auto;
   overflow-y: visible;
-  padding-top: 70px;
+  padding-top: 124px;
 }
 
 .timeline-grid {
@@ -518,8 +518,8 @@ select {
   bottom: calc(100% + 8px);
   z-index: 30;
   display: none;
-  min-width: 260px;
-  max-width: 380px;
+  min-width: 290px;
+  max-width: 420px;
   padding: 10px 12px;
   border: 1px solid #2f3a45;
   border-radius: 8px;
@@ -597,7 +597,7 @@ select {
 .order-card {
   display: grid;
   gap: 5px;
-  min-height: 112px;
+  min-height: 138px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel-soft);

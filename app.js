@@ -246,13 +246,15 @@ function orderLabel(order) {
 }
 
 function orderTooltip(order) {
+  const unit = order.unit || "pcs";
   return [
+    `Part No.: ${order.partNo || "-"}`,
+    `ยอดต้องผลิต: ${numberFormat.format(order.qty)} ${unit}`,
+    `ค้างผลิต: ${numberFormat.format(order.remaining)} ${unit}`,
     `Order: ${order.orderNo}`,
     `Part: ${order.partName}`,
-    `Part No.: ${order.partNo || "-"}`,
-    `Qty: ${numberFormat.format(order.remaining)} ${order.unit || "pcs"}`,
-    `Days: ${formatMachineDays(order.machineDays)}`,
-    `Finish: ${formatDate(order.finishDate)}`
+    `วันเครื่อง: ${formatMachineDays(order.machineDays)}`,
+    `จบ: ${formatDate(order.finishDate)}`
   ].join("\n");
 }
 
@@ -520,8 +522,10 @@ function renderMachineDetail(schedule) {
             <article class="order-card">
               <span>#${numberFormat.format(order.sequence)}</span>
               <strong>${escapeHtml(orderLabel(order))}</strong>
+              <small>Part No. ${escapeHtml(order.partNo || "-")}</small>
               <small>${escapeHtml(order.partName)}</small>
-              <b>${numberFormat.format(order.remaining)} ${escapeHtml(order.unit || "pcs")} · ${formatMachineDays(order.machineDays)} วัน</b>
+              <b>ยอดต้องผลิต ${numberFormat.format(order.qty)} ${escapeHtml(order.unit || "pcs")}</b>
+              <small>ค้างผลิต ${numberFormat.format(order.remaining)} ${escapeHtml(order.unit || "pcs")} · ${formatMachineDays(order.machineDays)} วัน</small>
             </article>
           `
         )
@@ -542,7 +546,10 @@ function renderMachineDetail(schedule) {
                 <strong>${escapeHtml(order.partName)}</strong>
                 <span class="muted-line">${escapeHtml(order.partNo || "-")}</span>
               </td>
-              <td class="numeric">${numberFormat.format(order.remaining)}</td>
+              <td class="numeric">
+                <strong>${numberFormat.format(order.qty)}</strong>
+                <span class="muted-line">ค้าง ${numberFormat.format(order.remaining)}</span>
+              </td>
               <td class="numeric">${formatMachineDays(order.machineDays)}</td>
               <td>${formatDate(order.startDate)}</td>
               <td>${formatDate(order.finishDate)}</td>
