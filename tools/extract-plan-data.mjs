@@ -106,6 +106,43 @@ function compact(value) {
   return String(value ?? "").trim();
 }
 
+function normalizeHeader(value) {
+  return compact(value).toLowerCase().replace(/[.:]/g, "");
+}
+
+function findColumn(headers, labels, fallback) {
+  const normalizedLabels = labels.map(normalizeHeader);
+  const index = headers.findIndex((header) => {
+    const normalized = normalizeHeader(header);
+    return normalizedLabels.some((label) => normalized.includes(label));
+  });
+  return index >= 0 ? index : fallback;
+}
+
+function buildColumns(headerRow) {
+  const headers = headerRow.map(compact);
+  return {
+    openDate: findColumn(headers, ["วันที่เปิด", "open"], 1),
+    orderNo: findColumn(headers, ["order no"], 2),
+    partName: findColumn(headers, ["part name"], 3),
+    partNo: findColumn(headers, ["part no"], 4),
+    rmNo: findColumn(headers, ["rm no"], 5),
+    qty: findColumn(headers, ["ยอดสั่งซื้อ", "order qty", "qty"], 6),
+    unit: findColumn(headers, ["unit"], 7),
+    dueDate: findColumn(headers, ["วันที่ต้องการ", "due"], 8),
+    shift: findColumn(headers, ["กะ", "shift"], 9),
+    plannedStart: findColumn(headers, ["วันที่เริ่ม", "start"], 14),
+    plannedFinish: findColumn(headers, ["วันที่จบ", "finish"], 15),
+    produced: findColumn(headers, ["ยอดการผลิต", "ผลิตแล้ว", "produced"], 16),
+    readyForPainting: findColumn(headers, ["พร้อม", "ready"], 17),
+    remaining: findColumn(headers, ["ค้างผลิต", "remain"], 18),
+    ngRework: findColumn(headers, ["ng", "rework"], 19),
+    productionStatus: findColumn(headers, ["สถานะ", "status"], 20),
+    progress: findColumn(headers, ["progress"], 21),
+    stock: findColumn(headers, ["stock"], 22)
+  };
+}
+
 function inferCapacity(machine, totalQty, orderCount) {
   if (knownCapacity[machine]) return knownCapacity[machine];
   if (/Bending/i.test(machine)) return 250;
@@ -118,11 +155,12 @@ function inferCapacity(machine, totalQty, orderCount) {
   return Math.max(250, Math.ceil(totalQty / Math.max(6, Math.min(20, orderCount * 2))));
 }
 
-function isOrderRow(row) {
-  const orderNo = compact(row[2]);
-  const partName = compact(row[3]);
-  const qty = parseNumber(row[6]);
-  return Boolean(orderNo && partName && qty > 0);
+function isOrderRow(row, column) {
+  const orderNo = compact(row[column.orderNo]);
+  const partName = compact(row[column.partName]);
+  const partNo = compact(row[column.partNo]);
+  const qty = parseNumber(row[column.qty]);
+  return Boolean(orderNo && (partName || partNo) && qty > 0);
 }
 
 const input = await FileBlob.load(sourceWorkbook);
@@ -132,40 +170,42 @@ const machines = [];
 
 for (const machine of sheetNames) {
   const sheet = workbook.worksheets.getItem(machine);
-  const values = sheet.getRange("A1:S120").values;
+  const values = sheet.getRange("A1:W120").values;
+  const column = buildColumns(values[0] ?? []);
   const machineOrders = [];
 
   for (let rowIndex = 2; rowIndex < values.length; rowIndex += 1) {
     const row = values[rowIndex] ?? [];
-    if (!isOrderRow(row)) continue;
+    if (!isOrderRow(row, column)) continue;
 
-    const qty = parseNumber(row[6]);
-    const produced = parseNumber(row[12]);
-    const explicitRemain = parseNumber(row[14]);
+    const nextIndex = orders.length + machineOrders.length;
+    const qty = parseNumber(row[column.qty]);
+    const produced = parseNumber(row[column.produced]);
+    const explicitRemain = parseNumber(row[column.remaining]);
     const remaining = explicitRemain > 0 ? explicitRemain : Math.max(0, qty - produced) || qty;
 
     machineOrders.push({
-      id: `base-${orders.length}`,
+      id: `base-${nextIndex}`,
       machine,
-      openDate: normalizeDate(row[1]),
-      orderNo: compact(row[2]),
-      partName: compact(row[3]),
-      partNo: compact(row[4]),
-      rmNo: compact(row[5]),
+      openDate: normalizeDate(row[column.openDate]),
+      orderNo: compact(row[column.orderNo]),
+      partName: compact(row[column.partName]) || compact(row[column.partNo]) || "-",
+      partNo: compact(row[column.partNo]),
+      rmNo: compact(row[column.rmNo]),
       qty,
-      unit: compact(row[7]) || "pcs",
-      dueDate: normalizeDate(row[8]),
-      shift: compact(row[9]),
-      plannedStart: normalizeDate(row[10]),
-      plannedFinish: normalizeDate(row[11]),
+      unit: compact(row[column.unit]) || "pcs",
+      dueDate: normalizeDate(row[column.dueDate]),
+      shift: compact(row[column.shift]),
+      plannedStart: normalizeDate(row[column.plannedStart]),
+      plannedFinish: normalizeDate(row[column.plannedFinish]),
       produced,
-      readyForPainting: parseNumber(row[13]),
+      readyForPainting: parseNumber(row[column.readyForPainting]),
       remaining,
-      ngRework: parseNumber(row[15]),
-      productionStatus: compact(row[16]),
-      progress: compact(row[17]),
-      stock: compact(row[18]),
-      sourceIndex: orders.length
+      ngRework: parseNumber(row[column.ngRework]),
+      productionStatus: compact(row[column.productionStatus]),
+      progress: compact(row[column.progress]),
+      stock: compact(row[column.stock]),
+      sourceIndex: nextIndex
     });
   }
 

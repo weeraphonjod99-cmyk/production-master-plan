@@ -12,7 +12,7 @@ const currentDateTime = new Date();
 const planStart = startOfDay(currentDateTime);
 const planDays = visiblePlanDays;
 const planEnd = addDays(planStart, planDays - 1);
-const orderStorageKey = `production-master-plan-orders-${planData.planYear}-${planData.planMonth}-v3`;
+const orderStorageKey = `production-master-plan-orders-${planData.planYear}-${planData.planMonth}-v4`;
 const capacityStorageKey = `production-master-plan-capacity-${planData.planYear}-${planData.planMonth}-v1`;
 const activeMachineKey = "production-master-plan-active-machine-v1";
 const liveSheetConfig = {
@@ -147,7 +147,7 @@ function buildMachines(data) {
 
 function buildSourceOrders(data) {
   return (data.orders ?? []).map((order, index) => ({
-    id: order.id || `base-${index}`,
+    id: `source-${index}`,
     machine: order.machine,
     openDate: order.openDate || "",
     orderNo: order.orderNo || "-",
