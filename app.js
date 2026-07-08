@@ -18,7 +18,7 @@ const currentDateTime = new Date();
 const planStart = startOfDay(currentDateTime);
 const planDays = visiblePlanDays;
 const planEnd = addDays(planStart, planDays - 1);
-const orderStorageKey = `production-master-plan-orders-${planData.planYear}-${planData.planMonth}-v5`;
+const orderStorageKey = `production-master-plan-orders-${planData.planYear}-${planData.planMonth}-v6`;
 const sourceSignatureKey = `${orderStorageKey}-source-signature`;
 const capacityStorageKey = `production-master-plan-capacity-${planData.planYear}-${planData.planMonth}-v1`;
 const capacityPercentStorageKey = "production-master-plan-capacity-percent-v1";
@@ -129,6 +129,8 @@ const resetPlanButton = document.querySelector("#resetPlanButton");
 const orderDialog = document.querySelector("#orderDialog");
 const addOrderForm = document.querySelector("#addOrderForm");
 const newOrderMachine = document.querySelector("#newOrderMachine");
+const newOrderStartDate = document.querySelector("#newOrderStartDate");
+const newOrderFinishDate = document.querySelector("#newOrderFinishDate");
 const cancelOrderButton = document.querySelector("#cancelOrderButton");
 const dismissOrderButton = document.querySelector("#dismissOrderButton");
 
@@ -273,6 +275,8 @@ function buildSourceOrders(data) {
     dueDate: order.dueDate || "",
     plannedStart: order.plannedStart || "",
     plannedFinish: order.plannedFinish || "",
+    targetFinish: order.targetFinish || "",
+    targetFinishTime: order.targetFinishTime || "",
     produced: parseNumber(order.produced),
     remaining: parseNumber(order.remaining || order.qty),
     productionStatus: order.productionStatus || "",
@@ -371,6 +375,8 @@ function buildSheetColumns(headers) {
     unit: findHeaderIndex(headers, ["unit"], unitFallback),
     dueDate: findHeaderIndex(headers, ["วันที่ต้องการ", "due"], dueFallback),
     shift: findHeaderIndex(headers, ["กะ", "shift"], shiftFallback),
+    targetFinish: findHeaderIndex(headers, ["วันที่เสร็จสิ้น", "finish date"], finishDateFallback),
+    targetFinishTime: findHeaderIndex(headers, ["เวลาเสร็จสิ้น", "finish time"], finishTimeFallback),
     plannedStart: findHeaderIndex(headers, ["วันที่เริ่ม", "planned start", "start"], startFallback),
     plannedFinish: findHeaderIndex(headers, ["วันที่จบ", "planned finish", "end"], endFallback),
     produced: findHeaderIndex(headers, ["ยอดการผลิต", "ผลิตแล้ว", "produced"], producedFallback),
@@ -438,6 +444,8 @@ function tableToOrders(table, machineName, machineIndex) {
       unit: cellText(row[column.unit]) || "pcs",
       dueDate: normalizeSheetDate(row[column.dueDate]),
       shift: cellText(row[column.shift]),
+      targetFinish: normalizeSheetDate(row[column.targetFinish]),
+      targetFinishTime: cellText(row[column.targetFinishTime]),
       plannedStart: normalizeSheetDate(row[column.plannedStart]),
       plannedFinish: normalizeSheetDate(row[column.plannedFinish]),
       produced,
@@ -541,7 +549,7 @@ function planSignature(orders) {
   return orders
     .map(
       (order) =>
-        `${order.machine}|${order.orderNo}|${order.partNo}|${order.qty}|${order.remaining}|${order.plannedStart}|${order.plannedFinish}|${order.produced}|${order.productionStatus}`
+        `${order.machine}|${order.orderNo}|${order.partNo}|${order.qty}|${order.remaining}|${order.plannedStart}|${order.plannedFinish}|${order.targetFinish}|${order.targetFinishTime}|${order.produced}|${order.productionStatus}`
     )
     .join(";");
 }
@@ -601,6 +609,8 @@ function cloneOrder(order, index = 0) {
     dueDate: order.dueDate || "",
     plannedStart: order.plannedStart || "",
     plannedFinish: order.plannedFinish || "",
+    targetFinish: order.targetFinish || "",
+    targetFinishTime: order.targetFinishTime || "",
     produced: parseNumber(order.produced),
     remaining: parseNumber(order.remaining || order.qty),
     productionStatus: order.productionStatus || "",
@@ -717,11 +727,15 @@ function daysBetween(startDate, endDate) {
   return Math.round((startOfDay(endDate) - startOfDay(startDate)) / 86400000);
 }
 
+function plannedFinishDateFor(order) {
+  return isoToDate(order.plannedFinish) ?? isoToDate(order.targetFinish);
+}
+
 function plannedStartDateFor(order, machineDays) {
   const plannedStartDate = isoToDate(order.plannedStart);
   if (plannedStartDate) return plannedStartDate;
 
-  const plannedFinishDate = isoToDate(order.plannedFinish);
+  const plannedFinishDate = plannedFinishDateFor(order);
   if (!plannedFinishDate) return null;
 
   return addDays(plannedFinishDate, -Math.max(0, Math.ceil(machineDays) - 1));
@@ -729,7 +743,7 @@ function plannedStartDateFor(order, machineDays) {
 
 function plannedOrderSortValue(order) {
   const plannedStartDate = isoToDate(order.plannedStart);
-  const plannedFinishDate = isoToDate(order.plannedFinish);
+  const plannedFinishDate = plannedFinishDateFor(order);
   const referenceDate = plannedStartDate ?? plannedFinishDate;
   return {
     hasPlan: Boolean(referenceDate),
@@ -801,6 +815,7 @@ function orderTooltip(order) {
     `เริ่ม: ${formatDate(order.startDate)}`,
     `จบ: ${formatDate(order.finishDate)}`,
     `แผน Sheet: ${order.sheetPlanUsed ? formatDate(order.sheetPlanDate) : "-"}`,
+    `วันที่เสร็จสิ้น Sheet: ${order.sheetFinishDate ? formatDate(order.sheetFinishDate) : "-"}`,
     `ข้อมูล: ${order.capacityMatched ? order.capacitySource : "ใช้ค่า fallback"}`
   ].join("\n");
 }
@@ -844,6 +859,7 @@ function buildSchedules() {
       const orderCapacity = capacityForOrder(order, machine, totalRemain, machineOrders.length);
       const machineDays = orderCapacity.dailyCapacity ? order.remaining / orderCapacity.dailyCapacity : 0;
       const sheetPlanDate = plannedStartDateFor(order, machineDays);
+      const sheetFinishDate = plannedFinishDateFor(order);
       const sheetPlanOffset = sheetPlanDate ? Math.max(0, daysBetween(planStart, sheetPlanDate)) : cursor;
       const startOffset = Math.max(cursor, sheetPlanOffset);
       const finishOffset = startOffset + machineDays;
@@ -861,7 +877,8 @@ function buildSchedules() {
         capacityMatched: orderCapacity.capacityMatched,
         capacityRecord: orderCapacity.capacityRecord,
         sheetPlanDate,
-        sheetPlanUsed: Boolean(sheetPlanDate),
+        sheetFinishDate,
+        sheetPlanUsed: Boolean(sheetPlanDate || sheetFinishDate),
         startDay,
         finishDay,
         startDate: addDays(planStart, startDay - 1),
@@ -1186,7 +1203,10 @@ function renderMachineDetail(schedule) {
               </td>
               <td class="numeric">${formatMachineDays(order.machineDays)}</td>
               <td>${formatDate(order.startDate)}</td>
-              <td>${formatDate(order.finishDate)}</td>
+              <td>
+                ${formatDate(order.finishDate)}
+                <span class="muted-line">Sheet ${order.sheetFinishDate ? formatDate(order.sheetFinishDate) : "-"}</span>
+              </td>
               <td><span class="pill ${order.overMonth ? "over" : "ok"}">${orderStatusText(order)}</span></td>
               <td>
                 <select class="machine-move" data-order-machine="${escapeHtml(order.id)}">
@@ -1308,8 +1328,10 @@ function addPlannerOrder(event) {
     qty,
     unit: "pcs",
     dueDate: "",
-    plannedStart: "",
-    plannedFinish: "",
+    plannedStart: newOrderStartDate?.value || "",
+    plannedFinish: newOrderFinishDate?.value || "",
+    targetFinish: newOrderFinishDate?.value || "",
+    targetFinishTime: "",
     produced: 0,
     remaining: qty,
     productionStatus: "Added",
@@ -1358,6 +1380,8 @@ capacityPercentInput.addEventListener("change", () => {
 addOrderButton.addEventListener("click", () => {
   populateNewOrderMachine(activeMachine);
   document.querySelector("#newOrderDate").value = dateToIso(planStart);
+  if (newOrderStartDate) newOrderStartDate.value = dateToIso(planStart);
+  if (newOrderFinishDate) newOrderFinishDate.value = "";
   orderDialog.showModal();
 });
 
