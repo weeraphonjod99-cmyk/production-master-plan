@@ -10,9 +10,11 @@ https://docs.google.com/spreadsheets/d/1gR-a77vkgVxDu0jdSZ9RPhnGLC5OabIRHSRGBN0h
 
 - `index.html` - dashboard shell
 - `plan-data.js` - exported planning snapshot used by GitHub Pages
+- `capacity-data.js` - exported production capacity snapshot used for Part No. based scheduling
 - `styles.css` - layout and visual styling
 - `app.js` - machine menu, monthly planning logic, editable order flow
 - `tools/extract-plan-data.mjs` - rebuilds `plan-data.js` from an exported workbook
+- `tools/extract-capacity-data.py` - rebuilds `capacity-data.js` from `Production Capacity.xlsx`
 
 ## Live Google Sheet updates
 

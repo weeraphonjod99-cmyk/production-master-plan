@@ -356,9 +356,18 @@ select {
   min-width: 150px;
 }
 
-.capacity-control input {
+.capacity-control input,
+.capacity-control select {
   width: 150px;
   text-align: right;
+}
+
+.percent-control {
+  min-width: 132px;
+}
+
+.percent-control select {
+  width: 132px;
 }
 
 .capacity-control small {
@@ -636,7 +645,7 @@ select {
 .order-card {
   display: grid;
   gap: 5px;
-  min-height: 138px;
+  min-height: 154px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel-soft);
@@ -680,7 +689,7 @@ select {
 
 table {
   width: 100%;
-  min-width: 980px;
+  min-width: 1160px;
   border-collapse: collapse;
 }
 
@@ -837,6 +846,7 @@ th.numeric {
   }
 
   .capacity-control input,
+  .capacity-control select,
   .machine-move {
     width: 100%;
     min-width: 0;

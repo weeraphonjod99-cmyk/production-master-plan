@@ -7,6 +7,12 @@ let planData = window.PRODUCTION_PLAN_DATA ?? {
   orders: []
 };
 
+const capacityData = window.PRODUCTION_CAPACITY_DATA ?? {
+  sourceUrl: "#",
+  generatedAt: "",
+  records: []
+};
+
 const visiblePlanDays = 30;
 const currentDateTime = new Date();
 const planStart = startOfDay(currentDateTime);
@@ -14,6 +20,7 @@ const planDays = visiblePlanDays;
 const planEnd = addDays(planStart, planDays - 1);
 const orderStorageKey = `production-master-plan-orders-${planData.planYear}-${planData.planMonth}-v4`;
 const capacityStorageKey = `production-master-plan-capacity-${planData.planYear}-${planData.planMonth}-v1`;
+const capacityPercentStorageKey = "production-master-plan-capacity-percent-v1";
 const activeMachineKey = "production-master-plan-active-machine-v1";
 const liveSheetConfig = {
   spreadsheetId: "1gR-a77vkgVxDu0jdSZ9RPhnGLC5OabIRHSRGBN0hZ18",
@@ -105,6 +112,7 @@ const resetFilterButton = document.querySelector("#resetFilterButton");
 const machineMenu = document.querySelector("#machineMenu");
 const selectedMachineName = document.querySelector("#selectedMachineName");
 const machineKpis = document.querySelector("#machineKpis");
+const capacityPercentInput = document.querySelector("#capacityPercent");
 const capacityInput = document.querySelector("#capacityInput");
 const calendarHeader = document.querySelector("#calendarHeader");
 const selectedTimeline = document.querySelector("#selectedTimeline");
@@ -123,10 +131,26 @@ const newOrderMachine = document.querySelector("#newOrderMachine");
 const cancelOrderButton = document.querySelector("#cancelOrderButton");
 const dismissOrderButton = document.querySelector("#dismissOrderButton");
 
+const machineAliasKeys = {
+  [normalizeKey("1#-OCP-80T")]: normalizeKey("1# OCP-80T"),
+  [normalizeKey("SW1# spot")]: normalizeKey("SW#1 Spot"),
+  [normalizeKey("Tapping")]: normalizeKey("Tapping LCNLC Box"),
+  [normalizeKey("Riveting")]: normalizeKey("Riveting PDB"),
+  [normalizeKey("SW4 NMS")]: normalizeKey("SW4 NMSCU Box"),
+  [normalizeKey("SW5 CU")]: normalizeKey("SW5 CU Cover"),
+  [normalizeKey("SW6 NLC")]: normalizeKey("SW6 NLC Door"),
+  [normalizeKey("SW7 LC 600")]: normalizeKey("SW7 LC NLC Box"),
+  [normalizeKey("SW8 Door LC")]: normalizeKey("SW8 LC Door")
+};
+
 let plannerOrders = loadPlannerOrders();
 let capacityOverrides = loadCapacityOverrides();
+let capacityPercent = loadCapacityPercent();
+const capacityLookup = buildCapacityLookup(capacityData.records);
 let schedules = buildSchedules();
 let activeMachine = pickInitialMachine();
+
+capacityPercentInput.value = String(capacityPercent);
 
 sourceSheetLink.href = planData.sourceUrl;
 updateDataStamp("โหลดข้อมูล snapshot");
@@ -135,6 +159,95 @@ function parseNumber(value) {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   const number = Number(String(value ?? "").replace(/[^\d.-]/g, ""));
   return Number.isFinite(number) ? number : 0;
+}
+
+function normalizeKey(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[·ยท]/g, "")
+    .replace(/[^a-z0-9#]+/g, "");
+}
+
+function normalizePartNo(value) {
+  return normalizeKey(value).replace(/^0+(?=\d)/, "");
+}
+
+function roundNumber(value, digits = 1) {
+  const factor = 10 ** digits;
+  return Math.round((Number(value) || 0) * factor) / factor;
+}
+
+function machineKeys(machineName) {
+  const primary = normalizeKey(machineName);
+  const alias = machineAliasKeys[primary];
+  return alias ? [primary, alias] : [primary];
+}
+
+function valueAtPercent(values, percent) {
+  const exact = parseNumber(values?.[String(percent)]);
+  if (exact > 0) return exact;
+  const base100 = parseNumber(values?.["100"]);
+  if (base100 > 0) return base100 * (percent / 100);
+  const base85 = parseNumber(values?.["85"]);
+  if (base85 > 0) return base85 * (percent / 85);
+  return 0;
+}
+
+function buildCapacityLookup(records = []) {
+  const byMachinePart = new Map();
+  for (const record of records) {
+    const partKey = normalizePartNo(record.partNo);
+    if (!partKey) continue;
+    for (const machineKey of machineKeys(record.machine)) {
+      const key = `${machineKey}|${partKey}`;
+      if (!byMachinePart.has(key)) byMachinePart.set(key, []);
+      byMachinePart.get(key).push(record);
+    }
+  }
+  return byMachinePart;
+}
+
+function findCapacityRecord(machineName, partNo, percent = capacityPercent) {
+  const partKey = normalizePartNo(partNo);
+  if (!partKey) return null;
+
+  const candidates = machineKeys(machineName).flatMap((machineKey) => capacityLookup.get(`${machineKey}|${partKey}`) ?? []);
+  if (!candidates.length) return null;
+
+  return candidates.reduce((slowest, record) => {
+    const slowestCapacity = valueAtPercent(slowest.perDay8Hours, percent);
+    const recordCapacity = valueAtPercent(record.perDay8Hours, percent);
+    if (!slowestCapacity) return record;
+    if (!recordCapacity) return slowest;
+    return recordCapacity < slowestCapacity ? record : slowest;
+  }, candidates[0]);
+}
+
+function scaledFallbackCapacity(machine, totalRemain, orderCount, percent = capacityPercent) {
+  const baseCapacity = capacityFor(machine, totalRemain, orderCount);
+  return Math.max(1, baseCapacity * (percent / 85));
+}
+
+function capacityForOrder(order, machine, totalRemain, orderCount, percent = capacityPercent) {
+  const record = findCapacityRecord(machine.name, order.partNo, percent);
+  if (record) {
+    const dailyCapacity = valueAtPercent(record.perDay8Hours, percent);
+    return {
+      dailyCapacity: Math.max(1, dailyCapacity),
+      piecesPerMinute: valueAtPercent(record.piecesPerMinute, percent),
+      capacitySource: `${record.machine} row ${record.sourceRow}`,
+      capacityMatched: true,
+      capacityRecord: record
+    };
+  }
+
+  return {
+    dailyCapacity: scaledFallbackCapacity(machine, totalRemain, orderCount, percent),
+    piecesPerMinute: 0,
+    capacitySource: "fallback",
+    capacityMatched: false,
+    capacityRecord: null
+  };
 }
 
 function buildMachines(data) {
@@ -494,11 +607,18 @@ function loadCapacityOverrides() {
   }
 }
 
+function loadCapacityPercent() {
+  const storage = getStorage();
+  const stored = parseNumber(storage?.getItem(capacityPercentStorageKey));
+  return stored > 0 ? stored : 85;
+}
+
 function savePlan(message = "บันทึกแผนแล้ว") {
   const storage = getStorage();
   if (storage) {
     storage.setItem(orderStorageKey, JSON.stringify(plannerOrders));
     storage.setItem(capacityStorageKey, JSON.stringify(capacityOverrides));
+    storage.setItem(capacityPercentStorageKey, String(capacityPercent));
   }
   setSaveStatus(message);
 }
@@ -508,6 +628,7 @@ function clearPlan() {
   if (storage) {
     storage.removeItem(orderStorageKey);
     storage.removeItem(capacityStorageKey);
+    storage.removeItem(capacityPercentStorageKey);
   }
 }
 
@@ -572,6 +693,16 @@ function formatMachineDays(value) {
   return dayFormat.format(Math.max(0.1, value));
 }
 
+function formatCapacityDay(value) {
+  if (!value) return "-";
+  return numberFormat.format(Math.round(value));
+}
+
+function formatPiecesPerMinute(value) {
+  if (!value) return "-";
+  return dayFormat.format(roundNumber(value, 2));
+}
+
 function statusClass(status) {
   if (status === "Over capacity") return "over";
   if (status === "Tight") return "tight";
@@ -603,10 +734,14 @@ function orderTooltip(order) {
     `Part No.: ${order.partNo || "-"}`,
     `ยอดต้องผลิต: ${numberFormat.format(order.qty)} ${unit}`,
     `ค้างผลิต: ${numberFormat.format(order.remaining)} ${unit}`,
+    `KPI: ${formatPiecesPerMinute(order.piecesPerMinute)} pcs/min`,
+    `กำลังผลิต: ${formatCapacityDay(order.dailyCapacity)} pcs/day`,
     `Order: ${order.orderNo}`,
     `Part: ${order.partName}`,
     `วันเครื่อง: ${formatMachineDays(order.machineDays)}`,
-    `จบ: ${formatDate(order.finishDate)}`
+    `เริ่ม: ${formatDate(order.startDate)}`,
+    `จบ: ${formatDate(order.finishDate)}`,
+    `ข้อมูล: ${order.capacityMatched ? order.capacitySource : "ใช้ค่า fallback"}`
   ].join("\n");
 }
 
@@ -634,11 +769,12 @@ function buildSchedules() {
   return machines.map((machine, machineIndex) => {
     const machineOrders = (ordersByMachine.get(machine.name) ?? []).map(cloneOrder);
     const totalRemain = machineOrders.reduce((sum, order) => sum + order.remaining, 0);
-    const capacityPerDay = capacityFor(machine, totalRemain, machineOrders.length);
+    const fallbackCapacityPerDay = scaledFallbackCapacity(machine, totalRemain, machineOrders.length);
     let cursor = 0;
 
     const orders = machineOrders.map((order, orderIndex) => {
-      const machineDays = capacityPerDay ? order.remaining / capacityPerDay : 0;
+      const orderCapacity = capacityForOrder(order, machine, totalRemain, machineOrders.length);
+      const machineDays = orderCapacity.dailyCapacity ? order.remaining / orderCapacity.dailyCapacity : 0;
       const startOffset = cursor;
       const finishOffset = cursor + machineDays;
       const startDay = Math.max(1, Math.floor(startOffset) + 1);
@@ -649,6 +785,11 @@ function buildSchedules() {
         ...order,
         sequence: orderIndex + 1,
         machineDays,
+        dailyCapacity: orderCapacity.dailyCapacity,
+        piecesPerMinute: orderCapacity.piecesPerMinute,
+        capacitySource: orderCapacity.capacitySource,
+        capacityMatched: orderCapacity.capacityMatched,
+        capacityRecord: orderCapacity.capacityRecord,
         startDay,
         finishDay,
         startDate: addDays(planStart, startDay - 1),
@@ -659,6 +800,7 @@ function buildSchedules() {
     });
 
     const totalDays = cursor;
+    const capacityPerDay = totalDays > 0 ? totalRemain / totalDays : fallbackCapacityPerDay;
     const utilization = totalDays / planDays;
     const overDays = Math.max(0, Math.ceil(totalDays - planDays));
     const idleDays = Math.max(0, Math.floor(planDays - totalDays));
@@ -675,6 +817,7 @@ function buildSchedules() {
       orders,
       totalRemain,
       capacityPerDay,
+      fallbackCapacityPerDay,
       totalDays,
       utilization,
       overDays,
@@ -907,11 +1050,14 @@ function renderMachineDetail(schedule) {
   activeMachine = schedule.name;
   const orderQuery = orderSearchInput.value.trim().toLowerCase();
   const visibleOrders = schedule.orders.filter((order) => orderMatchesSearch(order, orderQuery));
+  const matchedCapacityOrders = schedule.orders.filter((order) => order.capacityMatched).length;
 
   selectedMachineName.textContent = schedule.name;
-  capacityInput.value = Math.round(schedule.capacityPerDay);
+  capacityInput.value = Math.round(schedule.fallbackCapacityPerDay ?? schedule.capacityPerDay);
   machineKpis.innerHTML = `
     <span>${numberFormat.format(schedule.orders.length)} orders</span>
+    <span>KPI ${numberFormat.format(capacityPercent)}%</span>
+    <span>${numberFormat.format(matchedCapacityOrders)}/${numberFormat.format(schedule.orders.length)} Part match</span>
     <span>${formatMachineDays(schedule.totalDays)} วันเครื่อง</span>
     <span>จบ ${formatDate(schedule.finishDate)}</span>
     <span class="pill ${statusClass(schedule.status)}">${statusText(schedule.status)}</span>
@@ -932,6 +1078,7 @@ function renderMachineDetail(schedule) {
               <small>Part No. ${escapeHtml(order.partNo || "-")}</small>
               <small>${escapeHtml(order.partName)}</small>
               <b>ยอดต้องผลิต ${numberFormat.format(order.qty)} ${escapeHtml(order.unit || "pcs")}</b>
+              <small>KPI ${formatPiecesPerMinute(order.piecesPerMinute)} pcs/min · ${formatCapacityDay(order.dailyCapacity)} pcs/day</small>
               <small>ค้างผลิต ${numberFormat.format(order.remaining)} ${escapeHtml(order.unit || "pcs")} · ${formatMachineDays(order.machineDays)} วัน</small>
             </article>
           `
@@ -957,6 +1104,14 @@ function renderMachineDetail(schedule) {
                 <strong>${numberFormat.format(order.qty)}</strong>
                 <span class="muted-line">ค้าง ${numberFormat.format(order.remaining)}</span>
               </td>
+              <td class="numeric">
+                <strong>${formatPiecesPerMinute(order.piecesPerMinute)}</strong>
+                <span class="muted-line">pcs/min</span>
+              </td>
+              <td class="numeric">
+                <strong>${formatCapacityDay(order.dailyCapacity)}</strong>
+                <span class="muted-line">${order.capacityMatched ? "capacity" : "fallback"}</span>
+              </td>
               <td class="numeric">${formatMachineDays(order.machineDays)}</td>
               <td>${formatDate(order.startDate)}</td>
               <td>${formatDate(order.finishDate)}</td>
@@ -976,7 +1131,7 @@ function renderMachineDetail(schedule) {
           `
         )
         .join("")
-    : '<tr><td colspan="10"><div class="empty-state">ไม่มีออเดอร์ตามคำค้นหา</div></td></tr>';
+    : '<tr><td colspan="12"><div class="empty-state">ไม่มีออเดอร์ตามคำค้นหา</div></td></tr>';
 }
 
 function renderSummaryRows(items) {
@@ -1115,8 +1270,16 @@ resetFilterButton.addEventListener("click", () => {
 capacityInput.addEventListener("change", () => {
   const value = parseNumber(capacityInput.value);
   if (value > 0) {
-    capacityOverrides[activeMachine] = value;
+    capacityOverrides[activeMachine] = value * (85 / capacityPercent);
     refreshPlanner("ปรับกำลังผลิตต่อวันแล้ว");
+  }
+});
+
+capacityPercentInput.addEventListener("change", () => {
+  const value = parseNumber(capacityPercentInput.value);
+  if (value > 0) {
+    capacityPercent = value;
+    refreshPlanner(`ปรับ KPI กำลังผลิตเป็น ${numberFormat.format(value)}% แล้ว`);
   }
 });
 
@@ -1132,6 +1295,8 @@ resetPlanButton.addEventListener("click", () => {
   clearPlan();
   plannerOrders = sourceOrders.map(cloneOrder);
   capacityOverrides = {};
+  capacityPercent = 85;
+  capacityPercentInput.value = String(capacityPercent);
   schedules = buildSchedules();
   activeMachine = pickInitialMachine();
   savePlan("รีเซ็ตแผนแล้ว");
