@@ -214,6 +214,7 @@ for (const machine of sheetNames) {
       partName: compact(row[column.partName]) || compact(row[column.partNo]) || "-",
       partNo: compact(row[column.partNo]),
       rmNo: compact(row[column.rmNo]),
+      priorityNo: parseNumber(row[0]),
       qty,
       unit: compact(row[column.unit]) || "pcs",
       dueDate: normalizeDate(row[column.dueDate]),

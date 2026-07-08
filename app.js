@@ -97,6 +97,8 @@ const monthNames = [
   "ธันวาคม"
 ];
 
+const priorityPalette = ["#b42318", "#b45309", "#92720a", "#16735a", "#236a93", "#6a4f9f", "#7a4f6f"];
+
 let machines = buildMachines(planData);
 let sourceOrders = buildSourceOrders(planData);
 
@@ -270,6 +272,7 @@ function buildSourceOrders(data) {
     partName: order.partName || "-",
     partNo: order.partNo || "",
     rmNo: order.rmNo || "",
+    priorityNo: parseNumber(order.priorityNo),
     qty: parseNumber(order.qty),
     unit: order.unit || "pcs",
     dueDate: order.dueDate || "",
@@ -440,6 +443,7 @@ function tableToOrders(table, machineName, machineIndex) {
       partName,
       partNo,
       rmNo: cellText(row[column.rmNo]),
+      priorityNo: cellNumber(row[0]),
       qty,
       unit: cellText(row[column.unit]) || "pcs",
       dueDate: normalizeSheetDate(row[column.dueDate]),
@@ -549,7 +553,7 @@ function planSignature(orders) {
   return orders
     .map(
       (order) =>
-        `${order.machine}|${order.orderNo}|${order.partNo}|${order.qty}|${order.remaining}|${order.plannedStart}|${order.plannedFinish}|${order.targetFinish}|${order.targetFinishTime}|${order.produced}|${order.productionStatus}`
+        `${order.machine}|${order.orderNo}|${order.partNo}|${order.priorityNo}|${order.qty}|${order.remaining}|${order.plannedStart}|${order.plannedFinish}|${order.targetFinish}|${order.targetFinishTime}|${order.produced}|${order.productionStatus}`
     )
     .join(";");
 }
@@ -604,6 +608,7 @@ function cloneOrder(order, index = 0) {
     partName: order.partName || "-",
     partNo: order.partNo || "",
     rmNo: order.rmNo || "",
+    priorityNo: parseNumber(order.priorityNo),
     qty: parseNumber(order.qty),
     unit: order.unit || "pcs",
     dueDate: order.dueDate || "",
@@ -751,6 +756,28 @@ function plannedOrderSortValue(order) {
   };
 }
 
+function priorityNoFor(order) {
+  return parseNumber(order.priorityNo);
+}
+
+function prioritySortValue(order) {
+  const priorityNo = priorityNoFor(order);
+  return priorityNo > 0 ? priorityNo : Number.MAX_SAFE_INTEGER;
+}
+
+function priorityLabel(order) {
+  const priorityNo = priorityNoFor(order);
+  return priorityNo > 0 ? numberFormat.format(priorityNo) : "-";
+}
+
+function nextPriorityNoForMachine(machine) {
+  const machinePriorities = plannerOrders
+    .filter((order) => order.machine === machine)
+    .map(priorityNoFor)
+    .filter((priorityNo) => priorityNo > 0);
+  return machinePriorities.length ? Math.max(...machinePriorities) + 1 : 1;
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -804,6 +831,7 @@ function orderLabel(order) {
 function orderTooltip(order) {
   const unit = order.unit || "pcs";
   return [
+    `No. เร่งด่วน: ${priorityLabel(order)}`,
     `Part No.: ${order.partNo || "-"}`,
     `ยอดต้องผลิต: ${numberFormat.format(order.qty)} ${unit}`,
     `ค้างผลิต: ${numberFormat.format(order.remaining)} ${unit}`,
@@ -826,6 +854,12 @@ function colorFor(text, index) {
   return palette[Math.abs(hash) % palette.length];
 }
 
+function colorForPriority(order, fallbackIndex) {
+  const priorityNo = priorityNoFor(order);
+  if (!priorityNo) return colorFor(`${order.orderNo}-${order.partNo}`, fallbackIndex);
+  return priorityPalette[(Math.max(1, Math.round(priorityNo)) - 1) % priorityPalette.length];
+}
+
 function capacityFor(machine, totalRemain, orderCount) {
   const override = parseNumber(capacityOverrides[machine.name]);
   if (override > 0) return override;
@@ -845,6 +879,9 @@ function buildSchedules() {
     const machineOrders = (ordersByMachine.get(machine.name) ?? [])
       .map(cloneOrder)
       .sort((a, b) => {
+        const aPriority = prioritySortValue(a);
+        const bPriority = prioritySortValue(b);
+        if (aPriority !== bPriority) return aPriority - bPriority;
         const aPlan = plannedOrderSortValue(a);
         const bPlan = plannedOrderSortValue(b);
         if (aPlan.hasPlan !== bPlan.hasPlan) return Number(!aPlan.hasPlan) - Number(!bPlan.hasPlan);
@@ -884,7 +921,7 @@ function buildSchedules() {
         startDate: addDays(planStart, startDay - 1),
         finishDate: addDays(planStart, finishDay - 1),
         overMonth: finishDay > planDays,
-        color: colorFor(`${order.orderNo}-${order.partNo}`, machineIndex + orderIndex)
+        color: colorForPriority(order, machineIndex + orderIndex)
       };
     });
 
@@ -1146,6 +1183,7 @@ function renderMachineDetail(schedule) {
   machineKpis.innerHTML = `
     <span>${numberFormat.format(schedule.orders.length)} orders</span>
     <span>KPI ${numberFormat.format(capacityPercent)}%</span>
+    <span>เรียง No. 1→2</span>
     <span>${numberFormat.format(matchedCapacityOrders)}/${numberFormat.format(schedule.orders.length)} Part match</span>
     <span>${formatMachineDays(schedule.totalDays)} วันเครื่อง</span>
     <span>จบ ${formatDate(schedule.finishDate)}</span>
@@ -1162,7 +1200,7 @@ function renderMachineDetail(schedule) {
         .map(
           (order) => `
             <article class="order-card">
-              <span>#${numberFormat.format(order.sequence)}</span>
+              <span>No. ${escapeHtml(priorityLabel(order))}</span>
               <strong>${escapeHtml(orderLabel(order))}</strong>
               <small>Part No. ${escapeHtml(order.partNo || "-")}</small>
               <small>${escapeHtml(order.partName)}</small>
@@ -1180,7 +1218,10 @@ function renderMachineDetail(schedule) {
         .map(
           (order) => `
             <tr>
-              <td>${numberFormat.format(order.sequence)}</td>
+              <td>
+                <strong>${escapeHtml(priorityLabel(order))}</strong>
+                <span class="muted-line">คิว ${numberFormat.format(order.sequence)}</span>
+              </td>
               <td>
                 <strong>${escapeHtml(order.orderNo)}</strong>
                 <span class="muted-line">${formatIsoDate(order.openDate)}</span>
@@ -1325,6 +1366,7 @@ function addPlannerOrder(event) {
     partName: document.querySelector("#newOrderPart").value.trim(),
     partNo: document.querySelector("#newOrderPartNo").value.trim(),
     rmNo: "",
+    priorityNo: nextPriorityNoForMachine(machine),
     qty,
     unit: "pcs",
     dueDate: "",
