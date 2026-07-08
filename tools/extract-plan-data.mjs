@@ -121,25 +121,45 @@ function findColumn(headers, labels, fallback) {
 
 function buildColumns(headerRow) {
   const headers = headerRow.map(compact);
+  const rmNo = findColumn(headers, ["rm no"], 5);
+  const step = headers.findIndex(
+    (header, index) => index > rmNo && index <= rmNo + 2 && normalizeHeader(header).includes("step")
+  );
+  const hasStep = step >= 0;
+  const qtyFallback = hasStep ? step + 1 : rmNo + 1;
+  const unitFallback = qtyFallback + 1;
+  const dueFallback = unitFallback + 1;
+  const shiftFallback = dueFallback + 1;
+  const kpiFallback = shiftFallback + 1;
+  const targetFallback = kpiFallback + 1;
+  const finishDateFallback = targetFallback + 1;
+  const finishTimeFallback = finishDateFallback + 1;
+  const startFallback = finishTimeFallback + 1;
+  const endFallback = startFallback + 1;
+  const producedFallback = endFallback + 1;
+  const remainingFallback = hasStep ? producedFallback + 1 : producedFallback + 2;
+  const readyFallback = hasStep ? producedFallback + 2 : producedFallback + 1;
+  const ngFallback = Math.max(remainingFallback, readyFallback) + 1;
+
   return {
-    openDate: findColumn(headers, ["วันที่เปิด", "open"], 1),
+    openDate: findColumn(headers, ["วันที่เปิดออเดอร์", "วันที่เปิด", "open"], 1),
     orderNo: findColumn(headers, ["order no"], 2),
     partName: findColumn(headers, ["part name"], 3),
     partNo: findColumn(headers, ["part no"], 4),
-    rmNo: findColumn(headers, ["rm no"], 5),
-    qty: findColumn(headers, ["ยอดสั่งซื้อ", "order qty", "qty"], 6),
-    unit: findColumn(headers, ["unit"], 7),
-    dueDate: findColumn(headers, ["วันที่ต้องการ", "due"], 8),
-    shift: findColumn(headers, ["กะ", "shift"], 9),
-    plannedStart: findColumn(headers, ["วันที่เริ่ม", "start"], 14),
-    plannedFinish: findColumn(headers, ["วันที่จบ", "finish"], 15),
-    produced: findColumn(headers, ["ยอดการผลิต", "ผลิตแล้ว", "produced"], 16),
-    readyForPainting: findColumn(headers, ["พร้อม", "ready"], 17),
-    remaining: findColumn(headers, ["ค้างผลิต", "remain"], 18),
-    ngRework: findColumn(headers, ["ng", "rework"], 19),
-    productionStatus: findColumn(headers, ["สถานะ", "status"], 20),
-    progress: findColumn(headers, ["progress"], 21),
-    stock: findColumn(headers, ["stock"], 22)
+    rmNo,
+    qty: findColumn(headers, ["ยอดสั่งซื้อ", "order qty", "qty"], qtyFallback),
+    unit: findColumn(headers, ["unit"], unitFallback),
+    dueDate: findColumn(headers, ["วันที่ต้องการ", "due"], dueFallback),
+    shift: findColumn(headers, ["กะ", "shift"], shiftFallback),
+    plannedStart: findColumn(headers, ["วันที่เริ่ม", "planned start", "start"], startFallback),
+    plannedFinish: findColumn(headers, ["วันที่จบ", "planned finish", "end"], endFallback),
+    produced: findColumn(headers, ["ยอดการผลิต", "ผลิตแล้ว", "produced"], producedFallback),
+    readyForPainting: findColumn(headers, ["ready for painting", "พร้อม", "ready"], readyFallback),
+    remaining: findColumn(headers, ["ยอดค้างส่ง", "ค้างผลิต", "remain"], remainingFallback),
+    ngRework: findColumn(headers, ["ng/rework", "rework"], ngFallback),
+    productionStatus: findColumn(headers, ["สถานะการผลิต", "สถานะ", "status"], ngFallback + 1),
+    progress: findColumn(headers, ["ความคืบหน้า", "progress"], ngFallback + 2),
+    stock: findColumn(headers, ["stock"], ngFallback + 3)
   };
 }
 
@@ -170,7 +190,7 @@ const machines = [];
 
 for (const machine of sheetNames) {
   const sheet = workbook.worksheets.getItem(machine);
-  const values = sheet.getRange("A1:W120").values;
+  const values = sheet.getRange("A1:W1600").values;
   const column = buildColumns(values[0] ?? []);
   const machineOrders = [];
 

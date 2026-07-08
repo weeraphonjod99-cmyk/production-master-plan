@@ -18,7 +18,8 @@ const currentDateTime = new Date();
 const planStart = startOfDay(currentDateTime);
 const planDays = visiblePlanDays;
 const planEnd = addDays(planStart, planDays - 1);
-const orderStorageKey = `production-master-plan-orders-${planData.planYear}-${planData.planMonth}-v4`;
+const orderStorageKey = `production-master-plan-orders-${planData.planYear}-${planData.planMonth}-v5`;
+const sourceSignatureKey = `${orderStorageKey}-source-signature`;
 const capacityStorageKey = `production-master-plan-capacity-${planData.planYear}-${planData.planMonth}-v1`;
 const capacityPercentStorageKey = "production-master-plan-capacity-percent-v1";
 const activeMachineKey = "production-master-plan-active-machine-v1";
@@ -339,6 +340,49 @@ function findHeaderIndex(headers, labels, fallback) {
   return index >= 0 ? index : fallback;
 }
 
+function buildSheetColumns(headers) {
+  const rmNo = findHeaderIndex(headers, ["rm no"], 5);
+  const step = headers.findIndex(
+    (header, index) => index > rmNo && index <= rmNo + 2 && normalizeHeader(header).includes("step")
+  );
+  const hasStep = step >= 0;
+  const qtyFallback = hasStep ? step + 1 : rmNo + 1;
+  const unitFallback = qtyFallback + 1;
+  const dueFallback = unitFallback + 1;
+  const shiftFallback = dueFallback + 1;
+  const kpiFallback = shiftFallback + 1;
+  const targetFallback = kpiFallback + 1;
+  const finishDateFallback = targetFallback + 1;
+  const finishTimeFallback = finishDateFallback + 1;
+  const startFallback = finishTimeFallback + 1;
+  const endFallback = startFallback + 1;
+  const producedFallback = endFallback + 1;
+  const remainingFallback = hasStep ? producedFallback + 1 : producedFallback + 2;
+  const readyFallback = hasStep ? producedFallback + 2 : producedFallback + 1;
+  const ngFallback = Math.max(remainingFallback, readyFallback) + 1;
+
+  return {
+    openDate: findHeaderIndex(headers, ["วันที่เปิดออเดอร์", "วันที่เปิด", "open"], 1),
+    orderNo: findHeaderIndex(headers, ["order no"], 2),
+    partName: findHeaderIndex(headers, ["part name"], 3),
+    partNo: findHeaderIndex(headers, ["part no"], 4),
+    rmNo,
+    qty: findHeaderIndex(headers, ["ยอดสั่งซื้อ", "order qty", "qty"], qtyFallback),
+    unit: findHeaderIndex(headers, ["unit"], unitFallback),
+    dueDate: findHeaderIndex(headers, ["วันที่ต้องการ", "due"], dueFallback),
+    shift: findHeaderIndex(headers, ["กะ", "shift"], shiftFallback),
+    plannedStart: findHeaderIndex(headers, ["วันที่เริ่ม", "planned start", "start"], startFallback),
+    plannedFinish: findHeaderIndex(headers, ["วันที่จบ", "planned finish", "end"], endFallback),
+    produced: findHeaderIndex(headers, ["ยอดการผลิต", "ผลิตแล้ว", "produced"], producedFallback),
+    readyForPainting: findHeaderIndex(headers, ["ready for painting", "พร้อม", "ready"], readyFallback),
+    remaining: findHeaderIndex(headers, ["ยอดค้างส่ง", "ค้างผลิต", "remain"], remainingFallback),
+    ngRework: findHeaderIndex(headers, ["ng/rework", "rework"], ngFallback),
+    productionStatus: findHeaderIndex(headers, ["สถานะการผลิต", "สถานะ", "status"], ngFallback + 1),
+    progress: findHeaderIndex(headers, ["ความคืบหน้า", "progress"], ngFallback + 2),
+    stock: findHeaderIndex(headers, ["stock"], ngFallback + 3)
+  };
+}
+
 function knownCapacityFor(machineName, totalRemain, orderCount) {
   const existing = machines.find((machine) => machine.name === machineName);
   if (existing?.defaultCapacity > 0) return existing.defaultCapacity;
@@ -367,26 +411,7 @@ function tableToOrders(table, machineName, machineIndex) {
     dataRows = rows.slice(1);
   }
 
-  const column = {
-    openDate: findHeaderIndex(headers, ["วันที่เปิด", "open"], 1),
-    orderNo: findHeaderIndex(headers, ["order no"], 2),
-    partName: findHeaderIndex(headers, ["part name"], 3),
-    partNo: findHeaderIndex(headers, ["part no"], 4),
-    rmNo: findHeaderIndex(headers, ["rm no"], 5),
-    qty: findHeaderIndex(headers, ["ยอดสั่งซื้อ", "order qty", "qty"], 6),
-    unit: findHeaderIndex(headers, ["unit"], 7),
-    dueDate: findHeaderIndex(headers, ["วันที่ต้องการ", "due"], 8),
-    shift: findHeaderIndex(headers, ["กะ", "shift"], 9),
-    plannedStart: findHeaderIndex(headers, ["วันที่เริ่ม", "start"], 14),
-    plannedFinish: findHeaderIndex(headers, ["วันที่จบ", "finish"], 15),
-    produced: findHeaderIndex(headers, ["ยอดการผลิต", "ผลิตแล้ว", "produced"], 16),
-    readyForPainting: findHeaderIndex(headers, ["พร้อม", "ready"], 17),
-    remaining: findHeaderIndex(headers, ["ค้างผลิต", "remain"], 18),
-    ngRework: findHeaderIndex(headers, ["ng", "rework"], 19),
-    productionStatus: findHeaderIndex(headers, ["สถานะ", "status"], 20),
-    progress: findHeaderIndex(headers, ["progress"], 21),
-    stock: findHeaderIndex(headers, ["stock"], 22)
-  };
+  const column = buildSheetColumns(headers);
 
   const orders = [];
   for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex += 1) {
@@ -513,7 +538,12 @@ async function loadLivePlanData() {
 }
 
 function planSignature(orders) {
-  return orders.map((order) => `${order.machine}|${order.orderNo}|${order.partNo}|${order.qty}|${order.remaining}`).join(";");
+  return orders
+    .map(
+      (order) =>
+        `${order.machine}|${order.orderNo}|${order.partNo}|${order.qty}|${order.remaining}|${order.plannedStart}|${order.plannedFinish}|${order.produced}|${order.productionStatus}`
+    )
+    .join(";");
 }
 
 function applyLivePlanData(nextPlanData) {
@@ -585,6 +615,9 @@ function loadPlannerOrders() {
   if (!storage) return sourceOrders.map(cloneOrder);
 
   try {
+    const storedSignature = storage.getItem(sourceSignatureKey);
+    if (storedSignature && storedSignature !== planSignature(sourceOrders)) return sourceOrders.map(cloneOrder);
+
     const stored = JSON.parse(storage.getItem(orderStorageKey) || "null");
     if (!Array.isArray(stored) || !stored.length) return sourceOrders.map(cloneOrder);
     return stored
@@ -617,6 +650,7 @@ function savePlan(message = "บันทึกแผนแล้ว") {
   const storage = getStorage();
   if (storage) {
     storage.setItem(orderStorageKey, JSON.stringify(plannerOrders));
+    storage.setItem(sourceSignatureKey, planSignature(sourceOrders));
     storage.setItem(capacityStorageKey, JSON.stringify(capacityOverrides));
     storage.setItem(capacityPercentStorageKey, String(capacityPercent));
   }
@@ -627,6 +661,7 @@ function clearPlan() {
   const storage = getStorage();
   if (storage) {
     storage.removeItem(orderStorageKey);
+    storage.removeItem(sourceSignatureKey);
     storage.removeItem(capacityStorageKey);
     storage.removeItem(capacityPercentStorageKey);
   }
@@ -676,6 +711,30 @@ function isoToDate(iso) {
 
 function formatIsoDate(iso) {
   return formatDate(isoToDate(iso));
+}
+
+function daysBetween(startDate, endDate) {
+  return Math.round((startOfDay(endDate) - startOfDay(startDate)) / 86400000);
+}
+
+function plannedStartDateFor(order, machineDays) {
+  const plannedStartDate = isoToDate(order.plannedStart);
+  if (plannedStartDate) return plannedStartDate;
+
+  const plannedFinishDate = isoToDate(order.plannedFinish);
+  if (!plannedFinishDate) return null;
+
+  return addDays(plannedFinishDate, -Math.max(0, Math.ceil(machineDays) - 1));
+}
+
+function plannedOrderSortValue(order) {
+  const plannedStartDate = isoToDate(order.plannedStart);
+  const plannedFinishDate = isoToDate(order.plannedFinish);
+  const referenceDate = plannedStartDate ?? plannedFinishDate;
+  return {
+    hasPlan: Boolean(referenceDate),
+    time: referenceDate ? startOfDay(referenceDate).getTime() : Number.MAX_SAFE_INTEGER
+  };
 }
 
 function escapeHtml(value) {
@@ -741,6 +800,7 @@ function orderTooltip(order) {
     `วันเครื่อง: ${formatMachineDays(order.machineDays)}`,
     `เริ่ม: ${formatDate(order.startDate)}`,
     `จบ: ${formatDate(order.finishDate)}`,
+    `แผน Sheet: ${order.sheetPlanUsed ? formatDate(order.sheetPlanDate) : "-"}`,
     `ข้อมูล: ${order.capacityMatched ? order.capacitySource : "ใช้ค่า fallback"}`
   ].join("\n");
 }
@@ -767,7 +827,15 @@ function buildSchedules() {
   }
 
   return machines.map((machine, machineIndex) => {
-    const machineOrders = (ordersByMachine.get(machine.name) ?? []).map(cloneOrder);
+    const machineOrders = (ordersByMachine.get(machine.name) ?? [])
+      .map(cloneOrder)
+      .sort((a, b) => {
+        const aPlan = plannedOrderSortValue(a);
+        const bPlan = plannedOrderSortValue(b);
+        if (aPlan.hasPlan !== bPlan.hasPlan) return Number(!aPlan.hasPlan) - Number(!bPlan.hasPlan);
+        if (aPlan.time !== bPlan.time) return aPlan.time - bPlan.time;
+        return a.sourceIndex - b.sourceIndex;
+      });
     const totalRemain = machineOrders.reduce((sum, order) => sum + order.remaining, 0);
     const fallbackCapacityPerDay = scaledFallbackCapacity(machine, totalRemain, machineOrders.length);
     let cursor = 0;
@@ -775,8 +843,10 @@ function buildSchedules() {
     const orders = machineOrders.map((order, orderIndex) => {
       const orderCapacity = capacityForOrder(order, machine, totalRemain, machineOrders.length);
       const machineDays = orderCapacity.dailyCapacity ? order.remaining / orderCapacity.dailyCapacity : 0;
-      const startOffset = cursor;
-      const finishOffset = cursor + machineDays;
+      const sheetPlanDate = plannedStartDateFor(order, machineDays);
+      const sheetPlanOffset = sheetPlanDate ? Math.max(0, daysBetween(planStart, sheetPlanDate)) : cursor;
+      const startOffset = Math.max(cursor, sheetPlanOffset);
+      const finishOffset = startOffset + machineDays;
       const startDay = Math.max(1, Math.floor(startOffset) + 1);
       const finishDay = Math.max(startDay, Math.ceil(finishOffset));
       cursor = finishOffset;
@@ -790,6 +860,8 @@ function buildSchedules() {
         capacitySource: orderCapacity.capacitySource,
         capacityMatched: orderCapacity.capacityMatched,
         capacityRecord: orderCapacity.capacityRecord,
+        sheetPlanDate,
+        sheetPlanUsed: Boolean(sheetPlanDate),
         startDay,
         finishDay,
         startDate: addDays(planStart, startDay - 1),
