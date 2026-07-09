@@ -25,9 +25,13 @@ const capacityPercentStorageKey = "production-master-plan-capacity-percent-v1";
 const activeMachineKey = "production-master-plan-active-machine-v1";
 const liveSheetConfig = {
   spreadsheetId: "1gR-a77vkgVxDu0jdSZ9RPhnGLC5OabIRHSRGBN0hZ18",
+  apiUrl: "https://script.google.com/macros/s/AKfycbz05f1rSaHl73PFVAoOA7T2DCfBwVEcTJ564zrwU2GariZgTkLH3KGbxzSSXtTwgXj6Wg/exec",
+  apiAction: "productionPlan",
+  apiMaxRows: 100,
+  apiTimeoutMs: 30000,
   refreshMs: 60000,
   retryMs: 300000,
-  range: "A1:W1000",
+  range: "A1:X1000",
   sheets: [
     "#1 Arc \u00b7Stack",
     "#2 Arc \u00b7Stack",
@@ -505,7 +509,70 @@ function loadGvizTable(sheetName) {
   });
 }
 
-async function loadLivePlanData() {
+function loadJsonpEndpoint(baseUrl, params = {}, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    const callbackName = `__productionPlanApi_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const script = document.createElement("script");
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Apps Script plan endpoint timed out"));
+    }, timeoutMs);
+
+    function cleanup() {
+      window.clearTimeout(timeout);
+      delete window[callbackName];
+      script.remove();
+    }
+
+    window[callbackName] = (response) => {
+      cleanup();
+      resolve(response);
+    };
+
+    const url = new URL(baseUrl);
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
+    });
+    url.searchParams.set("callback", callbackName);
+    url.searchParams.set("cache", String(Date.now()));
+
+    script.onerror = () => {
+      cleanup();
+      reject(new Error("Apps Script plan endpoint failed"));
+    };
+    script.src = url.toString();
+    document.head.appendChild(script);
+  });
+}
+
+async function loadAppsScriptPlanData() {
+  if (!liveSheetConfig.apiUrl) throw new Error("Apps Script plan endpoint is not configured");
+  const response = await loadJsonpEndpoint(
+    liveSheetConfig.apiUrl,
+    {
+      action: liveSheetConfig.apiAction,
+      maxRows: liveSheetConfig.apiMaxRows
+    },
+    liveSheetConfig.apiTimeoutMs
+  );
+  if (!response?.ok) throw new Error(response?.error || "Apps Script plan endpoint returned an error");
+
+  const nextPlanData = response.planData || response.plan || response;
+  if (!Array.isArray(nextPlanData?.machines) || !Array.isArray(nextPlanData?.orders)) {
+    throw new Error("Apps Script plan endpoint returned an invalid plan payload");
+  }
+
+  return {
+    sourceUrl: nextPlanData.sourceUrl || planData.sourceUrl,
+    generatedAt: nextPlanData.generatedAt || new Date().toISOString(),
+    planYear: nextPlanData.planYear || planData.planYear,
+    planMonth: nextPlanData.planMonth || planData.planMonth,
+    machines: nextPlanData.machines,
+    orders: nextPlanData.orders
+  };
+}
+
+async function loadGvizPlanData() {
   const results = await Promise.allSettled(
     liveSheetConfig.sheets.map((sheetName, index) =>
       loadGvizTable(sheetName).then((table) => ({ sheetName, index, orders: tableToOrders(table, sheetName, index) }))
@@ -547,6 +614,23 @@ async function loadLivePlanData() {
     machines: machinesFromSheet,
     orders
   };
+}
+
+async function loadLivePlanData() {
+  const errors = [];
+  try {
+    return await loadAppsScriptPlanData();
+  } catch (error) {
+    errors.push(error);
+  }
+
+  try {
+    return await loadGvizPlanData();
+  } catch (error) {
+    errors.push(error);
+  }
+
+  throw new Error(errors.map((error) => error.message).filter(Boolean).join(" | ") || "Live sheet refresh failed");
 }
 
 function planSignature(orders) {

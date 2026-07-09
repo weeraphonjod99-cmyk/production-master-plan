@@ -18,4 +18,4 @@ https://docs.google.com/spreadsheets/d/1gR-a77vkgVxDu0jdSZ9RPhnGLC5OabIRHSRGBN0h
 
 ## Live Google Sheet updates
 
-The dashboard tries to refresh directly from the Google Sheet every 60 seconds. On GitHub Pages this works only when the spreadsheet is readable by the browser, such as a published-to-web sheet or a public read-only Apps Script JSON endpoint. If Google blocks access, the dashboard keeps using `plan-data.js` and shows that it is waiting for live sheet access.
+The dashboard refreshes through the read-only Apps Script endpoint configured in `app.js` (`action=productionPlan`) every 60 seconds. If that endpoint is unavailable, it falls back to direct Google Sheet JSONP and then to the exported `plan-data.js` snapshot.
