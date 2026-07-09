@@ -1136,33 +1136,37 @@ function renderCalendarHeader() {
 
   calendarHeader.style.setProperty("--timeline-days", planDays);
   calendarHeader.innerHTML = `
-    <div class="calendar-week-row" style="--timeline-days:${planDays}">
-      ${weekGroups
-        .map(
-          (group) => `
-            <span
-              class="calendar-week"
-              style="grid-column:${group.start} / span ${group.span}"
-              title="${escapeHtml(formatDate(group.startDate))} - ${escapeHtml(formatDate(group.endDate))}"
-            >
-              ${escapeHtml(group.label)}
-            </span>
-          `
-        )
-        .join("")}
-    </div>
-    <div class="calendar-day-row" style="--timeline-days:${planDays}">
-      ${dates
-        .map((date) => {
-          const isToday = date.getTime() === planStart.getTime() ? " is-today" : "";
-          return `
-            <span class="calendar-day${isToday}" title="${escapeHtml(formatDate(date))}">
-              <strong>${escapeHtml(formatShortDate(date))}</strong>
-              <small>${escapeHtml(weekdayFormat.format(date))}</small>
-            </span>
-          `;
-        })
-        .join("")}
+    <div class="calendar-scroll-inner">
+      <span class="calendar-machine-spacer">Machine</span>
+      <div class="calendar-week-row" style="--timeline-days:${planDays}">
+        ${weekGroups
+          .map(
+            (group) => `
+              <span
+                class="calendar-week"
+                style="grid-column:${group.start} / span ${group.span}"
+                title="${escapeHtml(formatDate(group.startDate))} - ${escapeHtml(formatDate(group.endDate))}"
+              >
+                ${escapeHtml(group.label)}
+              </span>
+            `
+          )
+          .join("")}
+      </div>
+      <span class="calendar-machine-spacer calendar-machine-sub">เครื่องจักร</span>
+      <div class="calendar-day-row" style="--timeline-days:${planDays}">
+        ${dates
+          .map((date) => {
+            const isToday = date.getTime() === planStart.getTime() ? " is-today" : "";
+            return `
+              <span class="calendar-day${isToday}" title="${escapeHtml(formatDate(date))}">
+                <strong>${escapeHtml(formatShortDate(date))}</strong>
+                <small>${escapeHtml(weekdayFormat.format(date))}</small>
+              </span>
+            `;
+          })
+          .join("")}
+      </div>
     </div>
   `;
 }
@@ -1206,12 +1210,7 @@ function renderMachineMenu(items) {
     .join("");
 }
 
-function renderSelectedTimeline(schedule) {
-  if (!schedule) {
-    selectedTimeline.innerHTML = '<div class="empty-state">ไม่มีข้อมูลเครื่องจักร</div>';
-    return;
-  }
-
+function renderTimelineGrid(schedule) {
   const visibleBlocks = schedule.orders
     .filter((order) => order.startDay <= planDays)
     .map((order) => ({
@@ -1223,16 +1222,15 @@ function renderSelectedTimeline(schedule) {
   const laneCount = Math.max(1, ...stacked.map((block) => block.lane));
 
   if (!stacked.length) {
-    selectedTimeline.innerHTML = `
-      <div class="timeline-grid empty-drop" data-drop-machine="${escapeHtml(schedule.name)}" style="--lane-count:1; --timeline-days:${planDays}">
+    return `
+      <div class="timeline-grid empty-drop" style="--lane-count:1; --timeline-days:${planDays}">
         <div class="empty-state timeline-empty">ยังไม่มีออเดอร์ในเครื่องนี้</div>
       </div>
     `;
-    return;
   }
 
-  selectedTimeline.innerHTML = `
-    <div class="timeline-grid" data-drop-machine="${escapeHtml(schedule.name)}" style="--lane-count:${laneCount}; --timeline-days:${planDays}">
+  return `
+    <div class="timeline-grid" style="--lane-count:${laneCount}; --timeline-days:${planDays}">
       ${stacked
         .map((order) => {
           const span = Math.max(1, order.end - order.start + 1);
@@ -1249,6 +1247,37 @@ function renderSelectedTimeline(schedule) {
             </button>
           `;
         })
+        .join("")}
+    </div>
+  `;
+}
+
+function renderSelectedTimeline(items) {
+  if (!items.length) {
+    selectedTimeline.innerHTML = '<div class="empty-state">ไม่มีข้อมูลเครื่องจักรตามตัวกรอง</div>';
+    return;
+  }
+
+  selectedTimeline.innerHTML = `
+    <div class="machine-timeline-list">
+      ${items
+        .map(
+          (schedule) => `
+            <section
+              class="machine-timeline-row ${schedule.name === activeMachine ? "active" : ""}"
+              data-drop-machine="${escapeHtml(schedule.name)}"
+            >
+              <button class="machine-timeline-label" type="button" data-machine="${escapeHtml(schedule.name)}">
+                <strong>${escapeHtml(schedule.name)}</strong>
+                <span>${numberFormat.format(schedule.orders.length)} orders · ${formatMachineDays(schedule.totalDays)} วัน</span>
+                <i class="pill ${statusClass(schedule.status)}">${statusText(schedule.status)}</i>
+              </button>
+              <div class="machine-timeline-track">
+                ${renderTimelineGrid(schedule)}
+              </div>
+            </section>
+          `
+        )
         .join("")}
     </div>
   `;
@@ -1375,7 +1404,7 @@ function render() {
   const schedule = selectedSchedule();
   renderMetrics();
   renderMachineMenu(items);
-  renderSelectedTimeline(schedule);
+  renderSelectedTimeline(items);
   renderMachineDetail(schedule);
   renderSummaryRows(items);
 }
@@ -1528,6 +1557,19 @@ resetPlanButton.addEventListener("click", () => {
 cancelOrderButton.addEventListener("click", () => orderDialog.close());
 dismissOrderButton.addEventListener("click", () => orderDialog.close());
 addOrderForm.addEventListener("submit", addPlannerOrder);
+
+let isSyncingTimelineScroll = false;
+function syncTimelineScroll(source, target) {
+  if (!source || !target || isSyncingTimelineScroll) return;
+  isSyncingTimelineScroll = true;
+  target.scrollLeft = source.scrollLeft;
+  window.requestAnimationFrame(() => {
+    isSyncingTimelineScroll = false;
+  });
+}
+
+calendarHeader.addEventListener("scroll", () => syncTimelineScroll(calendarHeader, selectedTimeline));
+selectedTimeline.addEventListener("scroll", () => syncTimelineScroll(selectedTimeline, calendarHeader));
 
 document.addEventListener("dragstart", (event) => {
   const block = event.target.closest("[data-order-id]");

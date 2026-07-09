@@ -457,6 +457,39 @@ select {
   padding-bottom: 2px;
 }
 
+.calendar-scroll-inner,
+.machine-timeline-row {
+  display: grid;
+  grid-template-columns: 220px minmax(2040px, 1fr);
+  gap: 10px;
+  min-width: 2270px;
+}
+
+.calendar-machine-spacer,
+.machine-timeline-label {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+}
+
+.calendar-machine-spacer {
+  display: grid;
+  min-height: 26px;
+  place-items: center;
+  color: #3b5165;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.calendar-machine-sub {
+  min-height: 46px;
+  color: var(--muted);
+}
+
 .calendar-week-row,
 .calendar-day-row {
   min-width: 2040px;
@@ -506,16 +539,71 @@ select {
 }
 
 .selected-timeline {
-  overflow-x: auto;
-  overflow-y: visible;
+  overflow: auto;
+  max-height: 640px;
   padding-top: 12px;
+  padding-bottom: 4px;
+}
+
+.machine-timeline-list {
+  display: grid;
+  gap: 12px;
+  min-width: 2270px;
+}
+
+.machine-timeline-row {
+  align-items: stretch;
+}
+
+.machine-timeline-row.active .machine-timeline-label {
+  border-color: var(--green);
+  box-shadow: inset 4px 0 0 var(--green), 0 8px 18px rgba(22, 115, 90, 0.12);
+}
+
+.machine-timeline-row.drag-over .timeline-grid,
+.machine-timeline-row.drag-over .machine-timeline-label {
+  border-color: var(--green);
+  box-shadow: inset 0 0 0 2px rgba(22, 115, 90, 0.2);
+}
+
+.machine-timeline-label {
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  min-height: 74px;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.machine-timeline-label strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.machine-timeline-label span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.machine-timeline-label .pill {
+  width: fit-content;
+}
+
+.machine-timeline-track {
+  min-width: 2040px;
 }
 
 .timeline-grid {
   min-width: 2040px;
   grid-auto-rows: 52px;
   gap: 6px;
-  min-height: calc(var(--lane-count) * 58px + 14px);
+  min-height: max(96px, calc(var(--lane-count) * 58px + 14px));
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 7px;
