@@ -446,12 +446,12 @@ select {
 .calendar-day-row,
 .timeline-grid {
   display: grid;
-  grid-template-columns: repeat(var(--timeline-days, 30), minmax(36px, 1fr));
+  grid-template-columns: repeat(var(--timeline-days, 30), minmax(68px, 1fr));
 }
 
 .calendar-header {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
   overflow-x: auto;
   padding-bottom: 2px;
@@ -459,13 +459,13 @@ select {
 
 .calendar-week-row,
 .calendar-day-row {
-  min-width: 1080px;
-  gap: 3px;
+  min-width: 2040px;
+  gap: 5px;
 }
 
 .calendar-week,
 .calendar-day {
-  min-width: 36px;
+  min-width: 68px;
   border-radius: 6px;
   font-weight: 800;
   text-align: center;
@@ -474,20 +474,20 @@ select {
 .calendar-week {
   background: #dfe8ef;
   color: #3b5165;
-  font-size: 11px;
-  line-height: 20px;
+  font-size: 13px;
+  line-height: 26px;
 }
 
 .calendar-day {
   display: grid;
-  gap: 1px;
-  min-height: 34px;
+  gap: 2px;
+  min-height: 46px;
   place-items: center;
   background: #edf2f6;
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1.05;
-  padding: 3px 0;
+  font-size: 13px;
+  line-height: 1.12;
+  padding: 5px 0;
 }
 
 .calendar-day strong,
@@ -496,7 +496,7 @@ select {
 }
 
 .calendar-day small {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -508,19 +508,19 @@ select {
 .selected-timeline {
   overflow-x: auto;
   overflow-y: visible;
-  padding-top: 124px;
+  padding-top: 12px;
 }
 
 .timeline-grid {
-  min-width: 1080px;
-  grid-auto-rows: 32px;
-  gap: 3px;
-  min-height: calc(var(--lane-count) * 35px + 10px);
+  min-width: 2040px;
+  grid-auto-rows: 52px;
+  gap: 6px;
+  min-height: calc(var(--lane-count) * 58px + 14px);
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 5px;
+  padding: 7px;
   background:
-    linear-gradient(90deg, rgba(39, 49, 59, 0.08) 1px, transparent 1px) 0 0 / calc(100% / var(--timeline-days, 30)) 100%,
+    linear-gradient(90deg, rgba(39, 49, 59, 0.12) 1px, transparent 1px) 0 0 / calc(100% / var(--timeline-days, 30)) 100%,
     #ffffff;
 }
 
@@ -537,18 +537,21 @@ select {
 
 .order-block {
   position: relative;
+  display: flex;
+  align-items: center;
   min-width: 0;
   overflow: visible;
   border: 1px solid color-mix(in srgb, var(--order-color) 82%, #1d252d);
   border-radius: 6px;
   background: color-mix(in srgb, var(--order-color) 80%, #27313b);
   color: #ffffff;
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 800;
-  line-height: 28px;
-  padding: 0 9px;
+  line-height: 1.15;
+  padding: 0 12px;
   text-align: left;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.28);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.32);
+  box-shadow: 0 2px 5px rgba(29, 37, 45, 0.22);
   cursor: grab;
 }
 
@@ -563,19 +566,19 @@ select {
   content: attr(data-tooltip);
   position: absolute;
   left: 0;
-  bottom: calc(100% + 8px);
+  top: calc(100% + 10px);
   z-index: 30;
   display: none;
-  min-width: 290px;
-  max-width: 420px;
-  padding: 10px 12px;
+  min-width: 340px;
+  max-width: 520px;
+  padding: 12px 14px;
   border: 1px solid #2f3a45;
   border-radius: 8px;
   background: #ffffff;
   color: var(--ink);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
-  line-height: 1.45;
+  line-height: 1.55;
   text-align: left;
   text-shadow: none;
   white-space: pre-line;
@@ -587,14 +590,14 @@ select {
   content: "";
   position: absolute;
   left: 16px;
-  bottom: calc(100% + 2px);
+  top: calc(100% + 4px);
   z-index: 31;
   display: none;
   width: 12px;
   height: 12px;
   background: #ffffff;
-  border-right: 1px solid #2f3a45;
-  border-bottom: 1px solid #2f3a45;
+  border-left: 1px solid #2f3a45;
+  border-top: 1px solid #2f3a45;
   transform: rotate(45deg);
   pointer-events: none;
 }
