@@ -249,6 +249,11 @@
     const goodQty = balances.reduce((sum, row) => sum + row.summary.goodQty, 0);
     const ngQty = balances.reduce((sum, row) => sum + row.summary.ngQty, 0);
     const waitingQty = balances.reduce((sum, row) => sum + row.summary.waitingQty, 0);
+    const reworkQty = state.results.reduce(
+      (sum, result) =>
+        String(result.disposition || "").trim().toLowerCase() === "rework" ? sum + toNumber(result.ngQty) : sum,
+      0
+    );
     return {
       receipts: state.receipts.length,
       issues: state.issues.length,
@@ -259,6 +264,7 @@
       goodQty,
       ngQty,
       waitingQty,
+      reworkQty,
       alerts: balances.filter((row) => row.summary.alert !== "ปกติ").length,
       closed: balances.filter((row) => row.summary.status === "ปิดงาน").length
     };
@@ -309,6 +315,7 @@
           ${metricCard("รับเข้าทั้งหมด", metrics.receipts, `${formatNumber(metrics.receivedQty)} pcs`, "blue")}
           ${metricCard("คงเหลือ HOLD", formatNumber(metrics.holdQty), "รอเบิกไปคัด", "amber")}
           ${metricCard("กำลังคัด", formatNumber(metrics.inSortingQty), "รอผลคัด", "teal")}
+          ${metricCard("งานรอ Rework", formatNumber(metrics.reworkQty), "รอแก้ไข", "rework")}
           ${metricCard("ปิดงาน", metrics.closed, "รายการ", "green")}
           ${metricCard("ต้องติดตาม", metrics.alerts, "รายการ", metrics.alerts ? "red" : "neutral")}
         </section>
