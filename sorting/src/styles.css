@@ -399,6 +399,12 @@ button:disabled {
   font-weight: 700;
 }
 
+.required-mark {
+  margin-left: 4px;
+  color: var(--red);
+  font-size: 14px;
+}
+
 .field input,
 .field select,
 .field textarea {
@@ -421,6 +427,28 @@ button:disabled {
 .field textarea:focus {
   border-color: var(--teal);
   outline: 3px solid rgba(11, 119, 113, 0.16);
+}
+
+.field.has-error input,
+.field.has-error select,
+.field.has-error textarea {
+  border-color: var(--red);
+  background: #fff8f7;
+  outline: 3px solid rgba(180, 35, 24, 0.12);
+}
+
+.form-error {
+  margin: 0 16px 12px;
+  padding: 11px 12px;
+  border: 1px solid #f4beb7;
+  border-radius: 8px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-weight: 700;
+}
+
+.form-error[hidden] {
+  display: none;
 }
 
 .form-actions {
@@ -717,6 +745,10 @@ tbody tr:hover {
 
   .form-actions {
     padding: 0 12px 12px;
+  }
+
+  .form-error {
+    margin: 0 12px 12px;
   }
 
   .form-actions .primary-button,

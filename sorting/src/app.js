@@ -471,7 +471,7 @@
   function renderReceive() {
     return `
       <section class="split-layout">
-        <form class="panel form-panel" id="receive-form">
+        <form class="panel form-panel" id="receive-form" novalidate>
           <div class="panel-head">
             <h2>รับเข้างาน</h2>
           </div>
@@ -536,7 +536,7 @@
 
     return `
       <section class="split-layout">
-        <form class="panel form-panel" id="issue-form">
+        <form class="panel form-panel" id="issue-form" novalidate>
           <div class="panel-head">
             <h2>เบิกออกไปคัด</h2>
           </div>
@@ -623,7 +623,7 @@
 
     return `
       <section class="split-layout">
-        <form class="panel form-panel" id="result-form">
+        <form class="panel form-panel" id="result-form" novalidate>
           <div class="panel-head">
             <h2>บันทึกผลการคัด</h2>
           </div>
@@ -791,18 +791,20 @@
   }
 
   function inputField(name, label, value = "", type = "text", attrs = "") {
+    const requiredMark = /\brequired\b/.test(attrs) ? '<b class="required-mark" aria-hidden="true">*</b>' : "";
     return `
       <label class="field">
-        <span>${escapeHtml(label)}</span>
+        <span>${escapeHtml(label)}${requiredMark}</span>
         <input type="${escapeHtml(type)}" name="${escapeHtml(name)}" value="${escapeHtml(value)}" ${attrs} />
       </label>
     `;
   }
 
   function selectField(name, label, options, value = "", attrs = "", placeholder = "") {
+    const requiredMark = /\brequired\b/.test(attrs) ? '<b class="required-mark" aria-hidden="true">*</b>' : "";
     return `
       <label class="field">
-        <span>${escapeHtml(label)}</span>
+        <span>${escapeHtml(label)}${requiredMark}</span>
         <select name="${escapeHtml(name)}" ${attrs}>
           ${optionTags(options, value, placeholder)}
         </select>
@@ -895,6 +897,11 @@
     document.getElementById("receive-form")?.addEventListener("submit", handleReceiveSubmit);
     document.getElementById("issue-form")?.addEventListener("submit", handleIssueSubmit);
     document.getElementById("result-form")?.addEventListener("submit", handleResultSubmit);
+    document.querySelectorAll("form").forEach((form) => {
+      form.addEventListener("invalid", handleInvalidField, true);
+      form.addEventListener("input", clearFieldError);
+      form.addEventListener("change", clearFieldError);
+    });
     document.getElementById("issue-receipt-no")?.addEventListener("change", (event) => {
       draft.issueReceiptNo = event.target.value;
       const receipt = receiptByNo(draft.issueReceiptNo);
@@ -940,13 +947,82 @@
     return Object.fromEntries(new FormData(form).entries());
   }
 
+  function fieldLabel(field) {
+    return field.closest(".field")?.querySelector("span")?.textContent.replace("*", "").trim() || field.name;
+  }
+
+  function showFormError(form, field, message) {
+    form.querySelectorAll("[aria-invalid='true']").forEach((control) => {
+      control.removeAttribute("aria-invalid");
+      control.closest(".field")?.classList.remove("has-error");
+    });
+    field?.setAttribute("aria-invalid", "true");
+    field?.closest(".field")?.classList.add("has-error");
+
+    let banner = form.querySelector(".form-error");
+    if (!banner) {
+      banner = document.createElement("div");
+      banner.className = "form-error";
+      banner.setAttribute("role", "alert");
+      form.querySelector(".form-actions")?.before(banner);
+    }
+    banner.textContent = message;
+    banner.hidden = false;
+
+    if (field) {
+      field.scrollIntoView({ behavior: "smooth", block: "center" });
+      field.focus({ preventScroll: true });
+    }
+  }
+
+  function handleInvalidField(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (form.dataset.invalidHandled === "true") return;
+    form.dataset.invalidHandled = "true";
+    const field = event.target;
+    const message = field.validity.valueMissing
+      ? `กรุณากรอก ${fieldLabel(field)}`
+      : `กรุณาตรวจสอบ ${fieldLabel(field)}`;
+    showFormError(form, field, message);
+    setTimeout(() => delete form.dataset.invalidHandled, 0);
+  }
+
+  function clearFieldError(event) {
+    const field = event.target;
+    if (!field.validity?.valid) return;
+    field.removeAttribute("aria-invalid");
+    field.closest(".field")?.classList.remove("has-error");
+    const banner = event.currentTarget.querySelector(".form-error");
+    if (banner) banner.hidden = true;
+  }
+
+  function requireFormValues(form, data, requirements) {
+    for (const [name, label] of requirements) {
+      if (String(data[name] ?? "").trim()) continue;
+      showFormError(form, form.elements.namedItem(name), `กรุณากรอก ${label}`);
+      return false;
+    }
+    return true;
+  }
+
   function handleReceiveSubmit(event) {
     event.preventDefault();
-    const data = formData(event.currentTarget);
+    const form = event.currentTarget;
+    const data = formData(form);
+    if (
+      !requireFormValues(form, data, [
+        ["partNo", "Part No."],
+        ["lotNo", "Lot No."],
+        ["problemType", "ประเภทปัญหา"],
+        ["receivedQty", "จำนวนรับเข้า"],
+        ["holdArea", "พื้นที่ HOLD"]
+      ])
+    )
+      return;
     const qty = toNumber(data.receivedQty);
     if (qty <= 0) {
-      setNotice("error", "จำนวนรับเข้าต้องมากกว่า 0");
-      return render();
+      return showFormError(form, form.elements.namedItem("receivedQty"), "จำนวนรับเข้าต้องมากกว่า 0");
     }
     if (state.receipts.some((receipt) => receipt.receiptNo === data.receiptNo)) {
       setNotice("error", "เลขที่รับเข้าซ้ำ");
@@ -979,21 +1055,32 @@
 
   function handleIssueSubmit(event) {
     event.preventDefault();
-    const data = formData(event.currentTarget);
+    const form = event.currentTarget;
+    const data = formData(form);
+    if (
+      !requireFormValues(form, data, [
+        ["receiptNo", "เลขที่รับเข้า"],
+        ["issueQty", "จำนวนเบิกไปคัด"],
+        ["sortingArea", "พื้นที่คัด"],
+        ["sortingReceiver", "ผู้รับไปคัด"]
+      ])
+    )
+      return;
     const receipt = receiptByNo(data.receiptNo);
     if (!receipt) {
-      setNotice("error", "ไม่พบเลขที่รับเข้า");
-      return render();
+      return showFormError(form, form.elements.namedItem("receiptNo"), "ไม่พบเลขที่รับเข้า");
     }
     const summary = receiptSummary(receipt);
     const qty = toNumber(data.issueQty);
     if (qty <= 0) {
-      setNotice("error", "จำนวนเบิกต้องมากกว่า 0");
-      return render();
+      return showFormError(form, form.elements.namedItem("issueQty"), "จำนวนเบิกต้องมากกว่า 0");
     }
     if (qty > summary.holdBalance) {
-      setNotice("error", `เบิกได้ไม่เกินคงเหลือ HOLD ${formatNumber(summary.holdBalance)} pcs`);
-      return render();
+      return showFormError(
+        form,
+        form.elements.namedItem("issueQty"),
+        `เบิกได้ไม่เกินคงเหลือ HOLD ${formatNumber(summary.holdBalance)} pcs`
+      );
     }
     state.issues.push({
       issueNo: data.issueNo,
@@ -1025,11 +1112,21 @@
 
   function handleResultSubmit(event) {
     event.preventDefault();
-    const data = formData(event.currentTarget);
+    const form = event.currentTarget;
+    const data = formData(form);
+    if (
+      !requireFormValues(form, data, [
+        ["issueNo", "เลขที่เบิก"],
+        ["goodQty", "งานดี"],
+        ["ngQty", "งานเสีย"],
+        ["waitingQty", "รอตัดสินใจ"],
+        ["sortedBy", "ผู้คัด"]
+      ])
+    )
+      return;
     const issue = issueByNo(data.issueNo);
     if (!issue) {
-      setNotice("error", "ไม่พบเลขที่เบิก");
-      return render();
+      return showFormError(form, form.elements.namedItem("issueNo"), "ไม่พบเลขที่เบิก");
     }
     const before = issueSummary(issue);
     const goodQty = toNumber(data.goodQty);
@@ -1037,12 +1134,14 @@
     const waitingQty = toNumber(data.waitingQty);
     const resultTotal = goodQty + ngQty + waitingQty;
     if (resultTotal <= 0) {
-      setNotice("error", "ผลคัดรวมต้องมากกว่า 0");
-      return render();
+      return showFormError(form, form.elements.namedItem("goodQty"), "ผลคัดรวมต้องมากกว่า 0");
     }
     if (resultTotal > before.inSorting) {
-      setNotice("error", `บันทึกผลได้ไม่เกินคงค้าง ${formatNumber(before.inSorting)} pcs`);
-      return render();
+      return showFormError(
+        form,
+        form.elements.namedItem("goodQty"),
+        `บันทึกผลได้ไม่เกินคงค้าง ${formatNumber(before.inSorting)} pcs`
+      );
     }
     const receipt = receiptByNo(issue.receiptNo) || {};
     const differenceAfter = before.inSorting - resultTotal;
