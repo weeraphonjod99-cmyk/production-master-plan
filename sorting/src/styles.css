@@ -51,11 +51,9 @@ button {
 }
 
 .install-button {
-  display: none;
-}
-
-body.can-install .install-button {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 button:disabled {
@@ -265,6 +263,64 @@ button:disabled {
 .notice.error {
   background: var(--red-soft);
   color: var(--red);
+}
+
+.install-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(16, 32, 42, 0.72);
+}
+
+.install-dialog {
+  width: min(440px, 100%);
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 24px 60px rgba(16, 32, 42, 0.28);
+}
+
+.install-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.install-dialog-head h2 {
+  margin: 0;
+  font-size: 19px;
+}
+
+.install-steps {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 20px 16px 24px;
+}
+
+.install-steps p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.install-mark {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+  border-radius: 8px;
+  background: #10202a;
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 800;
 }
 
 .dashboard-grid,
@@ -563,6 +619,11 @@ tbody tr:hover {
     min-height: 44px;
   }
 
+  .topbar-actions .install-button {
+    flex: 1 1 100%;
+    min-height: 48px;
+  }
+
   .metric-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
@@ -744,6 +805,17 @@ tbody tr:hover {
   .table-action {
     flex: 1 1 0;
     min-height: 42px;
+  }
+
+  .install-overlay {
+    align-items: end;
+    padding: 0;
+  }
+
+  .install-dialog {
+    width: 100%;
+    padding-bottom: env(safe-area-inset-bottom);
+    border-radius: 8px 8px 0 0;
   }
 }
 

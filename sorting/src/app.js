@@ -8,6 +8,7 @@
   let activeTab = "dashboard";
   let notice = null;
   let installPrompt = null;
+  let showInstallGuide = false;
   let draft = {
     issueReceiptNo: "",
     resultIssueNo: ""
@@ -299,7 +300,7 @@
           </div>
           <div class="topbar-actions">
             <span class="source-chip">${escapeHtml(seed.sourceWorkbook)}</span>
-            <button class="ghost-button install-button" type="button" data-action="install-app">ติดตั้งแอป</button>
+            <button class="primary-button install-button" type="button" data-action="install-app">ดาวน์โหลดลงโทรศัพท์</button>
             <button class="ghost-button" type="button" data-action="export-json">Export JSON</button>
           </div>
         </header>
@@ -321,6 +322,7 @@
         </nav>
         <main>${renderActiveTab()}</main>
       </div>
+      ${showInstallGuide ? renderInstallGuide() : ""}
     `;
     bindEvents();
   }
@@ -330,6 +332,28 @@
     const banner = `<div class="notice ${notice.type}" role="status">${escapeHtml(notice.text)}</div>`;
     notice = null;
     return banner;
+  }
+
+  function renderInstallGuide() {
+    const isAppleMobile = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    return `
+      <div class="install-overlay" role="presentation" data-action="close-install-guide">
+        <section class="install-dialog" role="dialog" aria-modal="true" aria-labelledby="install-title" data-install-dialog>
+          <div class="install-dialog-head">
+            <h2 id="install-title">ติดตั้งลงโทรศัพท์</h2>
+            <button class="ghost-button" type="button" data-action="close-install-guide">ปิด</button>
+          </div>
+          <div class="install-steps">
+            <span class="install-mark">SC</span>
+            <p>${
+              isAppleMobile
+                ? "เปิดหน้านี้ด้วย Safari กดปุ่มแชร์ แล้วเลือก เพิ่มไปยังหน้าจอโฮม"
+                : "เปิดเมนูของเบราว์เซอร์ แล้วเลือก ติดตั้งแอป หรือ เพิ่มไปยังหน้าจอหลัก"
+            }</p>
+          </div>
+        </section>
+      </div>
+    `;
   }
 
   function metricCard(label, value, caption, tone) {
@@ -883,6 +907,10 @@
   function handleAction(button) {
     const action = button.dataset.action;
     if (action === "install-app") return installApp();
+    if (action === "close-install-guide") {
+      showInstallGuide = false;
+      return render();
+    }
     if (action === "export-json") return exportJson();
     if (action === "export-csv") return exportCsv(button.dataset.export);
     if (action === "reset-data") return resetData();
@@ -1255,11 +1283,20 @@
   }
 
   async function installApp() {
-    if (!installPrompt) return;
-    installPrompt.prompt();
-    await installPrompt.userChoice;
-    installPrompt = null;
-    document.body.classList.remove("can-install");
+    const isInstalled = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+    if (isInstalled) {
+      setNotice("success", "ติดตั้งแอปในโทรศัพท์เครื่องนี้แล้ว");
+      return render();
+    }
+    if (installPrompt) {
+      installPrompt.prompt();
+      await installPrompt.userChoice;
+      installPrompt = null;
+      document.body.classList.remove("can-install");
+      return;
+    }
+    showInstallGuide = true;
+    render();
   }
 
   window.addEventListener("beforeinstallprompt", (event) => {
