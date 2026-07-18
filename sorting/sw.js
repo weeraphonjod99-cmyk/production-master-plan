@@ -1,5 +1,15 @@
 const CACHE_NAME = "sorting-control-mobile-v1";
-const APP_FILES = ["./", "./index.html", "./src/styles.css", "./src/data.js", "./src/app.js", "./manifest.webmanifest", "./app-icon.svg"];
+const APP_FILES = [
+  "./",
+  "./index.html",
+  "./src/styles.css",
+  "./src/data.js",
+  "./src/app.js",
+  "./manifest.webmanifest",
+  "./app-icon.svg",
+  "./app-icon-192.png",
+  "./app-icon-512.png"
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_FILES)));
