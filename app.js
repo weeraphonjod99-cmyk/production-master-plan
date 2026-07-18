@@ -27,8 +27,8 @@ const liveSheetConfig = {
   spreadsheetId: "1gR-a77vkgVxDu0jdSZ9RPhnGLC5OabIRHSRGBN0hZ18",
   apiUrl: "https://script.google.com/macros/s/AKfycbz05f1rSaHl73PFVAoOA7T2DCfBwVEcTJ564zrwU2GariZgTkLH3KGbxzSSXtTwgXj6Wg/exec",
   apiAction: "productionPlan",
-  apiMaxRows: 100,
-  apiTimeoutMs: 30000,
+  apiMaxRows: 300,
+  apiTimeoutMs: 60000,
   refreshMs: 60000,
   retryMs: 300000,
   range: "A1:X1000",
@@ -139,6 +139,26 @@ const newOrderStartDate = document.querySelector("#newOrderStartDate");
 const newOrderFinishDate = document.querySelector("#newOrderFinishDate");
 const cancelOrderButton = document.querySelector("#cancelOrderButton");
 const dismissOrderButton = document.querySelector("#dismissOrderButton");
+const productionEntryPanel = document.querySelector("#productionEntryPanel");
+const productionEntryForm = document.querySelector("#productionEntryForm");
+const entryMachine = document.querySelector("#entryMachine");
+const entryOrderNo = document.querySelector("#entryOrderNo");
+const entryPartName = document.querySelector("#entryPartName");
+const entryPartNo = document.querySelector("#entryPartNo");
+const entryStep = document.querySelector("#entryStep");
+const entryRmNo = document.querySelector("#entryRmNo");
+const entryQty = document.querySelector("#entryQty");
+const entryOpenDate = document.querySelector("#entryOpenDate");
+const entryDueDate = document.querySelector("#entryDueDate");
+const entryShift = document.querySelector("#entryShift");
+const entryPriorityNo = document.querySelector("#entryPriorityNo");
+const entryProduced = document.querySelector("#entryProduced");
+const entryReadyForPainting = document.querySelector("#entryReadyForPainting");
+const entryNgRework = document.querySelector("#entryNgRework");
+const entryRoutePreview = document.querySelector("#entryRoutePreview");
+const entrySaveStatus = document.querySelector("#entrySaveStatus");
+const clearEntryButton = document.querySelector("#clearEntryButton");
+const submitEntryButton = document.querySelector("#submitEntryButton");
 
 const machineAliasKeys = {
   [normalizeKey("1#-OCP-80T")]: normalizeKey("1# OCP-80T"),
@@ -275,17 +295,21 @@ function buildSourceOrders(data) {
     orderNo: order.orderNo || "-",
     partName: order.partName || "-",
     partNo: order.partNo || "",
+    step: order.step || "",
     rmNo: order.rmNo || "",
     priorityNo: parseNumber(order.priorityNo),
     qty: parseNumber(order.qty),
     unit: order.unit || "pcs",
     dueDate: order.dueDate || "",
+    shift: order.shift || "",
     plannedStart: order.plannedStart || "",
     plannedFinish: order.plannedFinish || "",
     targetFinish: order.targetFinish || "",
     targetFinishTime: order.targetFinishTime || "",
     produced: parseNumber(order.produced),
+    readyForPainting: parseNumber(order.readyForPainting),
     remaining: parseNumber(order.remaining || order.qty),
+    ngRework: parseNumber(order.ngRework),
     productionStatus: order.productionStatus || "",
     progress: order.progress || "",
     sourceIndex: Number(order.sourceIndex ?? index)
@@ -377,6 +401,7 @@ function buildSheetColumns(headers) {
     orderNo: findHeaderIndex(headers, ["order no"], 2),
     partName: findHeaderIndex(headers, ["part name"], 3),
     partNo: findHeaderIndex(headers, ["part no"], 4),
+    step: hasStep ? step : -1,
     rmNo,
     qty: findHeaderIndex(headers, ["ยอดสั่งซื้อ", "order qty", "qty"], qtyFallback),
     unit: findHeaderIndex(headers, ["unit"], unitFallback),
@@ -446,6 +471,7 @@ function tableToOrders(table, machineName, machineIndex) {
       orderNo,
       partName,
       partNo,
+      step: column.step >= 0 ? cellText(row[column.step]) : "",
       rmNo: cellText(row[column.rmNo]),
       priorityNo: cellNumber(row[0]),
       qty,
@@ -653,6 +679,7 @@ function applyLivePlanData(nextPlanData) {
   plannerOrders = sourceOrders.map(cloneOrder);
   schedules = buildSchedules();
   if (!schedules.some((schedule) => schedule.name === activeMachine)) activeMachine = pickInitialMachine();
+  populateProductionEntryMachine(entryMachine?.value || "AUTO");
   sourceSheetLink.href = planData.sourceUrl;
   updateDataStamp("อัปเดตจาก Google Sheet อัตโนมัติ");
   if (previousSignature !== nextSignature) setSaveStatus("อัปเดตข้อมูลใหม่จาก Google Sheet แล้ว");
@@ -691,17 +718,21 @@ function cloneOrder(order, index = 0) {
     orderNo: order.orderNo || "-",
     partName: order.partName || "-",
     partNo: order.partNo || "",
+    step: order.step || "",
     rmNo: order.rmNo || "",
     priorityNo: parseNumber(order.priorityNo),
     qty: parseNumber(order.qty),
     unit: order.unit || "pcs",
     dueDate: order.dueDate || "",
+    shift: order.shift || "",
     plannedStart: order.plannedStart || "",
     plannedFinish: order.plannedFinish || "",
     targetFinish: order.targetFinish || "",
     targetFinishTime: order.targetFinishTime || "",
     produced: parseNumber(order.produced),
+    readyForPainting: parseNumber(order.readyForPainting),
     remaining: parseNumber(order.remaining || order.qty),
+    ngRework: parseNumber(order.ngRework),
     productionStatus: order.productionStatus || "",
     progress: order.progress || "",
     sourceIndex: Number(order.sourceIndex ?? index),
@@ -917,6 +948,7 @@ function orderTooltip(order) {
   return [
     `No. เร่งด่วน: ${priorityLabel(order)}`,
     `Part No.: ${order.partNo || "-"}`,
+    `Step: ${order.step || "-"}`,
     `ยอดต้องผลิต: ${numberFormat.format(order.qty)} ${unit}`,
     `ค้างผลิต: ${numberFormat.format(order.remaining)} ${unit}`,
     `KPI: ${formatPiecesPerMinute(order.piecesPerMinute)} pcs/min`,
@@ -1057,6 +1089,85 @@ function machineOptionList(selectedMachine = "") {
 
 function populateNewOrderMachine(selectedMachine = activeMachine) {
   newOrderMachine.innerHTML = machineOptionList(selectedMachine);
+}
+
+function productionEntryMachineOptions(selectedMachine = "AUTO") {
+  return [
+    `<option value="AUTO"${selectedMachine === "AUTO" ? " selected" : ""}>AUTO จาก Part No. + Step</option>`,
+    ...machines.map((machine) => {
+      const selected = machine.name === selectedMachine ? " selected" : "";
+      return `<option value="${escapeHtml(machine.name)}"${selected}>${escapeHtml(machine.name)}</option>`;
+    })
+  ].join("");
+}
+
+function populateProductionEntryMachine(selectedMachine = entryMachine?.value || "AUTO") {
+  if (!entryMachine) return;
+  entryMachine.innerHTML = productionEntryMachineOptions(selectedMachine);
+}
+
+function normalizeEntryStep(value) {
+  return cleanText(value).toUpperCase().replace(/\s+/g, "");
+}
+
+function findEntryRoute(partNo, step, selectedMachine = "AUTO") {
+  const partKey = normalizePartNo(partNo);
+  const stepKey = normalizeEntryStep(step);
+  if (!partKey) return null;
+
+  const routeCandidates = (capacityData.records ?? [])
+    .filter((record) => normalizePartNo(record.partNo) === partKey)
+    .filter((record) => !selectedMachine || selectedMachine === "AUTO" || record.machine === selectedMachine)
+    .map((record) => {
+      const recordStep = normalizeEntryStep(record.step);
+      let score = 1;
+      if (stepKey && recordStep === stepKey) score = 3;
+      else if (!recordStep) score = 2;
+      else if (stepKey) score = 0;
+      return { ...record, routeScore: score };
+    })
+    .filter((record) => record.routeScore > 0);
+
+  if (!routeCandidates.length) return null;
+  return routeCandidates.sort((a, b) => {
+    const scoreSort = b.routeScore - a.routeScore;
+    if (scoreSort) return scoreSort;
+    return (a.sourceRow || 0) - (b.sourceRow || 0);
+  })[0];
+}
+
+function updateEntryRoutePreview() {
+  if (!entryRoutePreview) return;
+  const selectedMachine = entryMachine?.value || "AUTO";
+  const route = findEntryRoute(entryPartNo?.value, entryStep?.value, selectedMachine);
+  const qty = parseNumber(entryQty?.value);
+  if (!entryPartNo?.value.trim()) {
+    entryRoutePreview.textContent = "ระบบจะ preview เครื่อง, KPI และจำนวนวันผลิตหลังกรอก Part No.";
+    entryRoutePreview.classList.remove("ok", "warn");
+    return;
+  }
+  if (!route) {
+    entryRoutePreview.textContent = selectedMachine === "AUTO"
+      ? "ยังไม่พบ Part No. + Step ใน KPI 85 Lookup กรุณาเลือกเครื่องเอง หรือเพิ่มข้อมูล KPI ก่อน"
+      : `ใช้เครื่อง ${selectedMachine} แบบกำหนดเอง แต่ยังไม่พบ KPI ของ Part นี้`;
+    entryRoutePreview.classList.add("warn");
+    entryRoutePreview.classList.remove("ok");
+    return;
+  }
+  const dailyTarget = valueAtPercent(route.perDay8Hours, capacityPercent);
+  const piecesPerMinute = valueAtPercent(route.piecesPerMinute, capacityPercent);
+  const days = qty && dailyTarget ? qty / dailyTarget : 0;
+  entryRoutePreview.textContent =
+    `เครื่อง: ${route.machine} · KPI ${formatPiecesPerMinute(piecesPerMinute)} pcs/min · ` +
+    `${formatCapacityDay(dailyTarget)} pcs/day${days ? ` · ประมาณ ${formatMachineDays(days)} วันเครื่อง` : ""}`;
+  entryRoutePreview.classList.add("ok");
+  entryRoutePreview.classList.remove("warn");
+}
+
+function setEntryStatus(message, state = "") {
+  if (!entrySaveStatus) return;
+  entrySaveStatus.textContent = message;
+  entrySaveStatus.dataset.state = state;
 }
 
 function matchesQuery(schedule, query) {
@@ -1315,7 +1426,7 @@ function renderMachineDetail(schedule) {
             <article class="order-card">
               <span>No. ${escapeHtml(priorityLabel(order))}</span>
               <strong>${escapeHtml(orderLabel(order))}</strong>
-              <small>Part No. ${escapeHtml(order.partNo || "-")}</small>
+              <small>Part No. ${escapeHtml(order.partNo || "-")}${order.step ? ` · Step ${escapeHtml(order.step)}` : ""}</small>
               <small>${escapeHtml(order.partName)}</small>
               <b>ยอดต้องผลิต ${numberFormat.format(order.qty)} ${escapeHtml(order.unit || "pcs")}</b>
               <small>KPI ${formatPiecesPerMinute(order.piecesPerMinute)} pcs/min · ${formatCapacityDay(order.dailyCapacity)} pcs/day</small>
@@ -1341,7 +1452,7 @@ function renderMachineDetail(schedule) {
               </td>
               <td>
                 <strong>${escapeHtml(order.partName)}</strong>
-                <span class="muted-line">${escapeHtml(order.partNo || "-")}</span>
+                <span class="muted-line">${escapeHtml(order.partNo || "-")}${order.step ? ` · Step ${escapeHtml(order.step)}` : ""}</span>
               </td>
               <td class="numeric">
                 <strong>${numberFormat.format(order.qty)}</strong>
@@ -1463,6 +1574,73 @@ function reorderOrder(orderId, direction) {
   refreshPlanner("เรียงลำดับออเดอร์แล้ว");
 }
 
+function buildProductionEntryPayload() {
+  return {
+    machine: entryMachine?.value || "AUTO",
+    orderNo: entryOrderNo?.value.trim() || "",
+    partName: entryPartName?.value.trim() || "",
+    partNo: entryPartNo?.value.trim() || "",
+    step: entryStep?.value.trim() || "",
+    rmNo: entryRmNo?.value.trim() || "",
+    qty: parseNumber(entryQty?.value),
+    unit: "pcs",
+    openDate: entryOpenDate?.value || dateToIso(planStart),
+    dueDate: entryDueDate?.value || "",
+    shift: entryShift?.value.trim() || "",
+    priorityNo: parseNumber(entryPriorityNo?.value),
+    produced: parseNumber(entryProduced?.value),
+    readyForPainting: parseNumber(entryReadyForPainting?.value),
+    ngRework: parseNumber(entryNgRework?.value)
+  };
+}
+
+function resetProductionEntryForm(keepDate = true) {
+  if (!productionEntryForm) return;
+  productionEntryForm.reset();
+  populateProductionEntryMachine("AUTO");
+  if (keepDate && entryOpenDate) entryOpenDate.value = dateToIso(planStart);
+  updateEntryRoutePreview();
+  setEntryStatus("พร้อมบันทึกเข้า Google Sheet");
+}
+
+async function submitProductionEntry(event) {
+  event.preventDefault();
+  const payload = buildProductionEntryPayload();
+  if (!payload.orderNo || !payload.partName || !payload.partNo || payload.qty <= 0) {
+    setEntryStatus("กรอก Order, Part, Part No. และยอดผลิตให้ครบ", "error");
+    return;
+  }
+
+  submitEntryButton.disabled = true;
+  setEntryStatus("กำลังบันทึกเข้า Google Sheet...", "saving");
+  setSaveStatus("กำลังบันทึกออเดอร์ใหม่เข้า Google Sheet...");
+
+  try {
+    const response = await loadJsonpEndpoint(
+      liveSheetConfig.apiUrl,
+      {
+        action: "submitProductionEntry",
+        payload: JSON.stringify(payload)
+      },
+      90000
+    );
+    if (!response?.ok) throw new Error(response?.error || "บันทึกเข้า Google Sheet ไม่สำเร็จ");
+
+    const result = response.result || {};
+    setSaveStatus(`บันทึกออเดอร์ ${payload.orderNo} เข้า ${result.machine || "Google Sheet"} แล้ว`);
+    if (result.machine) activeMachine = result.machine;
+    resetProductionEntryForm(true);
+    setEntryStatus(`บันทึกแล้ว: ${result.machine || "-"} row ${result.row || "-"} (${result.routeSource || "route"})`, "ok");
+    const nextPlanData = await loadAppsScriptPlanData();
+    applyLivePlanData(nextPlanData);
+  } catch (error) {
+    setEntryStatus(error.message || "บันทึกไม่สำเร็จ", "error");
+    setSaveStatus(error.message || "บันทึกไม่สำเร็จ");
+  } finally {
+    submitEntryButton.disabled = false;
+  }
+}
+
 function addPlannerOrder(event) {
   event.preventDefault();
   const qty = parseNumber(document.querySelector("#newOrderQty").value);
@@ -1502,6 +1680,8 @@ function addPlannerOrder(event) {
   refreshPlanner("เพิ่มออเดอร์เข้าแผนแล้ว");
 }
 
+populateProductionEntryMachine("AUTO");
+resetProductionEntryForm(true);
 renderCalendarHeader();
 render();
 refreshLiveSheet();
@@ -1528,16 +1708,14 @@ capacityPercentInput.addEventListener("change", () => {
   const value = parseNumber(capacityPercentInput.value);
   if (value > 0) {
     capacityPercent = value;
+    updateEntryRoutePreview();
     refreshPlanner(`ปรับ KPI กำลังผลิตเป็น ${numberFormat.format(value)}% แล้ว`);
   }
 });
 
 addOrderButton.addEventListener("click", () => {
-  populateNewOrderMachine(activeMachine);
-  document.querySelector("#newOrderDate").value = dateToIso(planStart);
-  if (newOrderStartDate) newOrderStartDate.value = dateToIso(planStart);
-  if (newOrderFinishDate) newOrderFinishDate.value = "";
-  orderDialog.showModal();
+  productionEntryPanel?.scrollIntoView({ behavior: "smooth", block: "start" });
+  entryOrderNo?.focus();
 });
 
 savePlanButton.addEventListener("click", () => savePlan("บันทึกแผนแล้ว"));
@@ -1557,6 +1735,12 @@ resetPlanButton.addEventListener("click", () => {
 cancelOrderButton.addEventListener("click", () => orderDialog.close());
 dismissOrderButton.addEventListener("click", () => orderDialog.close());
 addOrderForm.addEventListener("submit", addPlannerOrder);
+productionEntryForm?.addEventListener("submit", submitProductionEntry);
+clearEntryButton?.addEventListener("click", () => resetProductionEntryForm(true));
+[entryMachine, entryPartNo, entryStep, entryQty].forEach((input) => {
+  input?.addEventListener("input", updateEntryRoutePreview);
+  input?.addEventListener("change", updateEntryRoutePreview);
+});
 
 let isSyncingTimelineScroll = false;
 function syncTimelineScroll(source, target) {

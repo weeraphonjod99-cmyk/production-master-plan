@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Production Master Plan</title>
-    <link rel="stylesheet" href="./styles.css?v=20260709-all-machines-large" />
+    <link rel="stylesheet" href="./styles.css?v=20260718-production-entry" />
   </head>
   <body>
     <main class="shell">
@@ -45,6 +45,84 @@
         <section class="edit-strip" aria-label="สถานะแผน">
           <span id="saveStatus">พร้อมวางแผน</span>
           <span id="dataStamp">ข้อมูลจากชีตใหม่</span>
+        </section>
+
+        <section class="entry-panel" id="productionEntryPanel" aria-label="Production Entry">
+          <div class="section-heading entry-heading">
+            <div>
+              <p class="eyebrow">Production Entry</p>
+              <h2>กรอกการผลิตหน้าเดียว</h2>
+              <p class="entry-subtitle">กรอก Order, Part No. และ Step แล้วระบบจะหาเครื่องจาก KPI 85 Lookup และส่งเข้าแผนเครื่องให้อัตโนมัติ</p>
+            </div>
+            <span class="entry-status" id="entrySaveStatus">พร้อมบันทึกเข้า Google Sheet</span>
+          </div>
+          <form class="entry-form" id="productionEntryForm">
+            <label>
+              <span>เครื่องจักร</span>
+              <select id="entryMachine">
+                <option value="AUTO">AUTO จาก Part No. + Step</option>
+              </select>
+            </label>
+            <label>
+              <span>Order No.</span>
+              <input id="entryOrderNo" type="text" placeholder="TH-SCDD..." required />
+            </label>
+            <label class="wide-field">
+              <span>Part Name</span>
+              <input id="entryPartName" type="text" placeholder="ชื่อชิ้นงาน" required />
+            </label>
+            <label>
+              <span>Part No.</span>
+              <input id="entryPartNo" type="text" placeholder="เช่น SB-059C-2" required />
+            </label>
+            <label>
+              <span>Step</span>
+              <input id="entryStep" type="text" placeholder="เช่น 1/1 หรือ Step 4-5" />
+            </label>
+            <label>
+              <span>RM No.</span>
+              <input id="entryRmNo" type="text" placeholder="Material / RM" />
+            </label>
+            <label>
+              <span>ยอดสั่งซื้อ</span>
+              <input id="entryQty" type="number" min="1" step="1" placeholder="0" required />
+            </label>
+            <label>
+              <span>วันที่เปิดออเดอร์</span>
+              <input id="entryOpenDate" type="date" />
+            </label>
+            <label>
+              <span>วันที่ต้องการ</span>
+              <input id="entryDueDate" type="date" />
+            </label>
+            <label>
+              <span>กะ</span>
+              <input id="entryShift" type="text" placeholder="A / B / Day" />
+            </label>
+            <label>
+              <span>No. เร่งด่วน</span>
+              <input id="entryPriorityNo" type="number" min="1" step="1" placeholder="Auto" />
+            </label>
+            <label>
+              <span>ยอดผลิตแล้ว</span>
+              <input id="entryProduced" type="number" min="0" step="1" placeholder="0" />
+            </label>
+            <label>
+              <span>Ready for painting</span>
+              <input id="entryReadyForPainting" type="number" min="0" step="1" placeholder="0" />
+            </label>
+            <label>
+              <span>NG/ReWork</span>
+              <input id="entryNgRework" type="number" min="0" step="1" placeholder="0" />
+            </label>
+            <div class="entry-preview" id="entryRoutePreview">
+              ระบบจะ preview เครื่อง, KPI และจำนวนวันผลิตหลังกรอก Part No.
+            </div>
+            <div class="entry-actions">
+              <button class="button" id="clearEntryButton" type="button">ล้างฟอร์ม</button>
+              <button class="button primary" id="submitEntryButton" type="submit">บันทึกเข้าแผนเครื่อง</button>
+            </div>
+          </form>
         </section>
 
         <section class="planner-layout">
@@ -235,6 +313,6 @@
 
     <script src="./plan-data.js?v=20260708-priority-color"></script>
     <script src="./capacity-data.js?v=20260708-capacity"></script>
-    <script src="./app.js?v=20260709-all-machines-large"></script>
+    <script src="./app.js?v=20260718-production-entry"></script>
   </body>
 </html>
