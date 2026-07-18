@@ -7,6 +7,7 @@
   let state = loadState();
   let activeTab = "dashboard";
   let notice = null;
+  let installPrompt = null;
   let draft = {
     issueReceiptNo: "",
     resultIssueNo: ""
@@ -298,6 +299,7 @@
           </div>
           <div class="topbar-actions">
             <span class="source-chip">${escapeHtml(seed.sourceWorkbook)}</span>
+            <button class="ghost-button install-button" type="button" data-action="install-app">ติดตั้งแอป</button>
             <button class="ghost-button" type="button" data-action="export-json">Export JSON</button>
           </div>
         </header>
@@ -799,7 +801,12 @@
               .map(
                 (row) =>
                   `<tr>${row
-                    .map((cell) => `<td>${cell && typeof cell === "object" && "__html" in cell ? cell.__html : escapeHtml(cell)}</td>`)
+                    .map(
+                      (cell, index) =>
+                        `<td data-label="${escapeHtml(headers[index] || "")}">${
+                          cell && typeof cell === "object" && "__html" in cell ? cell.__html : escapeHtml(cell)
+                        }</td>`
+                    )
                     .join("")}</tr>`
               )
               .join("")}
@@ -875,6 +882,7 @@
 
   function handleAction(button) {
     const action = button.dataset.action;
+    if (action === "install-app") return installApp();
     if (action === "export-json") return exportJson();
     if (action === "export-csv") return exportCsv(button.dataset.export);
     if (action === "reset-data") return resetData();
@@ -1244,6 +1252,29 @@
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  }
+
+  async function installApp() {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice;
+    installPrompt = null;
+    document.body.classList.remove("can-install");
+  }
+
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    installPrompt = event;
+    document.body.classList.add("can-install");
+  });
+
+  window.addEventListener("appinstalled", () => {
+    installPrompt = null;
+    document.body.classList.remove("can-install");
+  });
+
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js"));
   }
 
   render();
